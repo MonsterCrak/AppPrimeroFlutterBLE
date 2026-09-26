@@ -9,6 +9,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 
 import 'beacon.dart';
+import 'house_layout.dart';
 
 @immutable
 class HouseMap {
@@ -25,11 +26,16 @@ class HouseMap {
   /// Static beacons placed in this house.
   final List<Beacon> beacons;
 
+  /// Architectural details (walls, doors, labels, excluded zones).
+  /// Defaults to empty for legacy callers; `miCasa()` populates it.
+  final HouseLayout layout;
+
   const HouseMap({
     required this.name,
     required this.bounds,
     required this.rooms,
     required this.beacons,
+    this.layout = const HouseLayout(),
   });
 
   /// Returns a copy of this map with the given fields replaced.
@@ -38,12 +44,14 @@ class HouseMap {
     Rect? bounds,
     List<Rect>? rooms,
     List<Beacon>? beacons,
+    HouseLayout? layout,
   }) {
     return HouseMap(
       name: name ?? this.name,
       bounds: bounds ?? this.bounds,
       rooms: rooms ?? this.rooms,
       beacons: beacons ?? this.beacons,
+      layout: layout ?? this.layout,
     );
   }
 
@@ -113,6 +121,7 @@ class HouseMap {
         Rect.fromLTWH(0.311, 0.800, 0.578, 0.118),
       ],
       beacons: const [],
+      layout: HouseLayout.miCasaFromSvg(),
     );
   }
 

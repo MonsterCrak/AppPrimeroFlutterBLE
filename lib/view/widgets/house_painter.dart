@@ -1,5 +1,6 @@
-/// Renders a [HouseMap] (rooms + beacons) plus optional user position and
-/// planned route to a Canvas in normalized coordinates.
+/// Renders a [HouseMap] (rooms + beacons + architectural layout) plus an
+/// optional user position and planned route to a Canvas in normalized
+/// coordinates.
 ///
 /// The painter is **pure**: it only draws, never computes state. It receives
 /// everything it needs through the constructor, so it can be reused as a
@@ -28,12 +29,18 @@ class HousePainter extends CustomPainter {
   final Color userFill;
   final Color userStroke;
   final Color routeStroke;
+  final Color wallColor;
+  final Color doorColor;
+  final Color labelColor;
+  final Color excludedFill;
+  final Color excludedStroke;
   final double roomStrokeWidth;
   final double beaconStrokeWidth;
   final double userStrokeWidth;
   final double routeStrokeWidth;
   final double beaconRadiusFraction; // of smaller canvas side
   final double userRadiusFraction;
+  final double wallThicknessFraction;
 
   HousePainter({
     required this.houseMap,
@@ -46,12 +53,18 @@ class HousePainter extends CustomPainter {
     this.userFill = const Color(0xFF2196F3),
     this.userStroke = const Color(0xFF0D47A1),
     this.routeStroke = const Color(0xFF9E9E9E),
-    this.roomStrokeWidth = 1.5,
+    this.wallColor = const Color(0xFF1E293B),
+    this.doorColor = const Color(0xFF1E293B),
+    this.labelColor = const Color(0xFF475569),
+    this.excludedFill = const Color(0x22EF4444),
+    this.excludedStroke = const Color(0xFFEF4444),
+    this.roomStrokeWidth = 1.0,
     this.beaconStrokeWidth = 2.0,
     this.userStrokeWidth = 2.0,
     this.routeStrokeWidth = 1.2,
     this.beaconRadiusFraction = 0.025,
     this.userRadiusFraction = 0.04,
+    this.wallThicknessFraction = 0.005,
   });
 
   @override
@@ -60,9 +73,13 @@ class HousePainter extends CustomPainter {
     final h = size.height;
     if (w <= 0 || h <= 0) return;
 
-    _paintRoute(canvas, w, h);
     _paintRooms(canvas, w, h);
+    _paintExcludedZones(canvas, w, h);
+    _paintRoute(canvas, w, h);
+    _paintWalls(canvas, w, h);
+    _paintDoors(canvas, w, h);
     _paintBeacons(canvas, w, h);
+    _paintLabels(canvas, w, h);
     _paintUser(canvas, w, h);
   }
 
@@ -85,13 +102,78 @@ class HousePainter extends CustomPainter {
     }
   }
 
+  void _paintExcludedZones(Canvas canvas, double w, double h) {
+    if (houseMap.layout.excludedZones.isEmpty) return;
+    final fill = Paint()..color = excludedFill;
+    final stroke = Paint()
+      ..color = excludedStroke
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    for (final zone in houseMap.layout.excludedZones) {
+      final rect = Rect.fromLTWH(
+        zone.rect.left * w,
+        zone.rect.top * h,
+        zone.rect.width * w,
+        zone.rect.height * h,
+      );
+      canvas.drawRect(rect, fill);
+      canvas.drawRect(rect, stroke);
+      if (zone.label != null) {
+        _drawText(
+          canvas,
+          zone.label!,
+          Offset(rect.center.dx, rect.center.dy),
+          fontSize: h * 0.014,
+          color: excludedStroke,
+          bold: false,
+        );
+      }
+    }
+  }
+
+  void _paintWalls(Canvas canvas, double w, double h) {
+    if (houseMap.layout.walls.isEmpty) return;
+    final thickness = wallThicknessFraction * (w < h ? w : h);
+    final paint = Paint()
+      ..color = wallColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = thickness
+      ..strokeCap = StrokeCap.square;
+    for (final wall in houseMap.layout.walls) {
+      canvas.drawLine(
+        Offset(wall.from.dx * w, wall.from.dy * h),
+        Offset(wall.to.dx * w, wall.to.dy * h),
+        paint,
+      );
+    }
+  }
+
+  void _paintDoors(Canvas canvas, double w, double h) {
+    if (houseMap.layout.doors.isEmpty) return;
+    final radius = 0.012 * (w < h ? w : h);
+    final stroke = Paint()
+      ..color = doorColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    for (final door in houseMap.layout.doors) {
+      final center = Offset(door.center.dx * w, door.center.dy * h);
+      // Erase a small gap on the wall by painting the background.
+      canvas.drawCircle(center, radius * 1.2, Paint()..color = Colors.white);
+      // Draw a 90° arc to suggest the swing.
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      canvas.drawArc(rect, 0, 1.57, false, stroke);
+    }
+  }
+
   void _paintBeacons(Canvas canvas, double w, double h) {
     final fill = Paint()..color = beaconFill;
     final stroke = Paint()
       ..color = beaconStroke
       ..style = PaintingStyle.stroke
       ..strokeWidth = beaconStrokeWidth;
-
     final radius = beaconRadiusFraction * (w < h ? w : h);
 
     for (final beacon in houseMap.beacons) {
@@ -109,20 +191,16 @@ class HousePainter extends CustomPainter {
       ..strokeWidth = routeStrokeWidth
       ..strokeCap = StrokeCap.round;
 
-    // Dashed path: build by drawing short segments separated by gaps.
     final dashLen = w * 0.02;
     final gapLen = w * 0.015;
     final points = route
         .map((p) => Offset(p.dx * w, p.dy * h))
         .toList(growable: false);
     for (var i = 0; i < points.length - 1; i++) {
-      _drawDashedSegment(canvas, points[i], points[i + 1], dashLen, gapLen,
-          paint);
+      _drawDashedSegment(canvas, points[i], points[i + 1], dashLen, gapLen, paint);
     }
-    // Close the loop if there are >=3 waypoints.
     if (points.length >= 3) {
-      _drawDashedSegment(canvas, points.last, points.first, dashLen, gapLen,
-          paint);
+      _drawDashedSegment(canvas, points.last, points.first, dashLen, gapLen, paint);
     }
   }
 
@@ -141,6 +219,39 @@ class HousePainter extends CustomPainter {
       );
       traveled = segEnd + gapLen;
     }
+  }
+
+  void _paintLabels(Canvas canvas, double w, double h) {
+    if (houseMap.layout.labels.isEmpty) return;
+    for (final label in houseMap.layout.labels) {
+      // Detect beacon labels (B1/B2/B3) and color them green, others gray.
+      final isBeacon = RegExp(r'^B[123]$').hasMatch(label.text);
+      _drawText(
+        canvas,
+        label.text,
+        Offset(label.position.dx * w, label.position.dy * h),
+        fontSize: h * label.fontFraction,
+        color: isBeacon ? const Color(0xFF065F46) : labelColor,
+        bold: true,
+      );
+    }
+  }
+
+  void _drawText(Canvas canvas, String text, Offset center,
+      {required double fontSize, required Color color, required bool bold}) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout();
+    tp.paint(canvas, Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
   }
 
   void _paintUser(Canvas canvas, double w, double h) {
@@ -164,10 +275,11 @@ class HousePainter extends CustomPainter {
       !_listEq(old.route, route) ||
       old.roomFill != roomFill ||
       old.userFill != userFill ||
-      old.routeStroke != routeStroke;
+      old.routeStroke != routeStroke ||
+      old.wallColor != wallColor ||
+      old.labelColor != labelColor;
 }
 
-// Helper: structural equality for List<Offset> without depending on collectionEquals.
 bool _listEq(List<Offset> a, List<Offset> b) {
   if (identical(a, b)) return true;
   if (a.length != b.length) return false;
