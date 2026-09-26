@@ -2,11 +2,16 @@
 ///
 /// Wraps a [SimulationNotifier] (via [ListenableBuilder]) and a
 /// [ModeController] for swapping between simulated and real BLE sources.
+/// Surfaces mode-switch errors and live BLE errors via SnackBars.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 
 import 'package:app_primero_flutter_ble/models/beacon_mode.dart';
+import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
 import 'package:app_primero_flutter_ble/view/widgets/control_bar.dart';
@@ -14,91 +19,156 @@ import 'package:app_primero_flutter_ble/view/widgets/map_canvas.dart';
 import 'package:app_primero_flutter_ble/view/widgets/mode_selector.dart';
 import 'package:app_primero_flutter_ble/view/widgets/telemetry_panel.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final SimulationNotifier notifier;
   final ModeController modeController;
-  final ValueChanged<String>? onError;
 
   const HomeScreen({
     super.key,
     required this.notifier,
     required this.modeController,
-    this.onError,
   });
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  StreamSubscription<BleError?>? _errorsSub;
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _errorsSub = widget.modeController.errors.stream.listen(_showError);
+  }
+
+  @override
+  void dispose() {
+    _errorsSub?.cancel();
+    super.dispose();
+  }
+
+  void _showError(BleError? err) {
+    if (err == null || !mounted) return;
+    final messenger = _scaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+
+    final requiresSettings = err.requiresOpenSettings;
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(err.message),
+          backgroundColor: Colors.red.shade700,
+          duration: const Duration(seconds: 6),
+          action: requiresSettings
+              ? SnackBarAction(
+                  label: 'Settings',
+                  textColor: Colors.white,
+                  onPressed: () => ph.openAppSettings(),
+                )
+              : SnackBarAction(
+                  label: 'OK',
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
+        ),
+      );
+  }
+
   Future<void> _onModeChanged(BuildContext context, BeaconMode target) async {
-    final result = await modeController.switchTo(target);
-    if (!result.ok && context.mounted) {
-      onError?.call(result.errorMessage ?? 'Error al cambiar de modo');
+    final messenger = _scaffoldMessengerKey.currentState;
+    final result = await widget.modeController.switchTo(target);
+    if (!result.ok && messenger != null) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(result.errorMessage ?? 'Error al cambiar de modo'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 6),
+            action: result.requiresOpenSettings
+                ? SnackBarAction(
+                    label: 'Settings',
+                    textColor: Colors.white,
+                    onPressed: () => ph.openAppSettings(),
+                  )
+                : null,
+          ),
+        );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Emulador BLE Indoor'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Center(
-              child: ListenableBuilder(
-                listenable: notifier,
-                builder: (_, __) => _ModeBadge(
-                  mode: notifier.mode == BeaconMode.simulated
-                      ? 'SIMULACIÓN'
-                      : 'REAL BLE',
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Emulador BLE Indoor'),
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: ListenableBuilder(
+                  listenable: widget.notifier,
+                  builder: (_, __) => _ModeBadge(
+                    mode: widget.notifier.mode == BeaconMode.simulated
+                        ? 'SIMULACIÓN'
+                        : 'REAL BLE',
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              ListenableBuilder(
-                listenable: notifier,
-                builder: (_, __) => ModeSelector(
-                  mode: notifier.mode,
-                  onChanged: (m) => _onModeChanged(context, m),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              children: [
+                ListenableBuilder(
+                  listenable: widget.notifier,
+                  builder: (_, __) => ModeSelector(
+                    mode: widget.notifier.mode,
+                    onChanged: (m) => _onModeChanged(context, m),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500),
-                    child: ListenableBuilder(
-                      listenable: notifier,
-                      builder: (_, __) => MapCanvas(
-                        houseMap: notifier.houseMap,
-                        userPosition: notifier.userPosition,
-                        route: notifier.waypoints,
+                const SizedBox(height: 12),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: ListenableBuilder(
+                        listenable: widget.notifier,
+                        builder: (_, __) => MapCanvas(
+                          houseMap: widget.notifier.houseMap,
+                          userPosition: widget.notifier.userPosition,
+                          route: widget.notifier.waypoints,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              const _Legend(),
-              const SizedBox(height: 8),
-              ListenableBuilder(
-                listenable: notifier,
-                builder: (_, __) => TelemetryPanel(notifier: notifier),
-              ),
-              const SizedBox(height: 12),
-              ListenableBuilder(
-                listenable: notifier,
-                builder: (_, __) => ControlBar(
-                  notifier: notifier,
-                  onReset: notifier.reset,
+                const SizedBox(height: 12),
+                const _Legend(),
+                const SizedBox(height: 8),
+                ListenableBuilder(
+                  listenable: widget.notifier,
+                  builder: (_, __) => TelemetryPanel(notifier: widget.notifier),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                ListenableBuilder(
+                  listenable: widget.notifier,
+                  builder: (_, __) => ControlBar(
+                    notifier: widget.notifier,
+                    onReset: widget.notifier.reset,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

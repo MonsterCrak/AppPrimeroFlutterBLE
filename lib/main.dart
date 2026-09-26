@@ -48,12 +48,6 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
         home: HomeScreen(
           notifier: notifier,
           modeController: modeController,
-          onError: (msg) {
-            // In a real app this would show a SnackBar via ScaffoldMessenger.
-            // For now we just log; the WU-13 wiring is complete.
-            // ignore: avoid_print
-            print('ModeController error: $msg');
-          },
         ),
       ),
     );

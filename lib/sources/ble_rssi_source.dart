@@ -1,4 +1,4 @@
-/// RSSI source backed by real BLE iBeacon scan via `flutter_beacon`.
+/// RSSI source backed by real BLE iBeacon scan via `dchs_flutter_beacon`.
 ///
 /// Platform support:
 /// - Android: uses Android-Beacon-Library under the hood. Detects all
@@ -8,6 +8,14 @@
 /// The source emits a fresh [Map<beaconId, RssiSample>] every time the
 /// scanner reports new ranging data. Beacons are mapped to logical IDs
 /// (B1/B2/B3) via [BeaconConfig.minorToBeaconId] using their iBeacon Minor.
+///
+/// Error handling (WU-15):
+/// - Validates Bluetooth state before [start]. Emits [BleError.bluetoothOff]
+///   if the adapter is off and returns false.
+/// - Emits [BleError.permissionDenied] / [BleError.permissionPermanentlyDenied]
+///   if the underlying scanner refuses to initialize due to missing permissions.
+/// - On ranging stream errors, emits [BleError.rangingFailed] and
+///   automatically re-subscribes after a backoff.
 library;
 
 import 'dart:async';
@@ -19,6 +27,7 @@ import 'package:dchs_flutter_beacon/dchs_flutter_beacon.dart' as fb;
 import 'package:app_primero_flutter_ble/config/beacon_config.dart';
 import 'package:app_primero_flutter_ble/models/rssi_sample.dart';
 import 'package:app_primero_flutter_ble/sources/beacon_scanner_api.dart';
+import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/sources/rssi_source.dart';
 
 class BleRssiSource implements RssiSource {
@@ -33,9 +42,13 @@ class BleRssiSource implements RssiSource {
 
   final StreamController<Map<String, RssiSample>> _changes =
       StreamController<Map<String, RssiSample>>.broadcast();
+  final StreamController<BleError> _errors =
+      StreamController<BleError>.broadcast();
   final Map<String, RssiSample> _snapshot = <String, RssiSample>{};
   StreamSubscription<fb.RangingResult>? _sub;
+  Timer? _retryTimer;
   bool _initialized = false;
+  bool _disposed = false;
 
   /// Constructor for production.
   ///
@@ -72,6 +85,10 @@ class BleRssiSource implements RssiSource {
   @override
   Stream<void> get changes => _changes.stream.map((_) {});
 
+  /// Surfaces [BleError] events (bluetooth off, permission denied, ranging
+  /// stream failures). UI listens to show snackbars.
+  Stream<BleError> get errors => _errors.stream;
+
   @override
   void updateUserPosition(Offset position) {
     _userPosition = position;
@@ -80,15 +97,60 @@ class BleRssiSource implements RssiSource {
 
   /// Initializes the underlying scanner and starts ranging.
   ///
-  /// Returns true if initialization succeeded and ranging started.
-  /// Returns false if permissions were denied or Bluetooth is off.
+  /// Returns `true` if initialization + ranging started. Returns `false`
+  /// if [BleErrorKind.bluetoothOff] or [BleErrorKind.permissionDenied].
+  /// The detailed reason is emitted via [errors].
   Future<bool> start() async {
+    if (_disposed) return false;
     if (_initialized) return true;
+
+    // 1. Verify Bluetooth adapter state.
+    final btState = await _api.bluetoothState();
+    if (btState != fb.BluetoothState.stateOn) {
+      _emitError(BleError.bluetoothOff());
+      return false;
+    }
+
+    // 2. Try to initialize (this is where flutter_beacon checks permissions).
     final ok = await _api.initializeAndCheckScanning();
-    if (!ok) return false;
-    _sub = _api.ranging(_regions).listen(_onRangingResult);
+    if (!ok) {
+      // We don't know here if it's permanently denied; the API doesn't
+      // expose that. We mark as "permission denied, possibly permanent"
+      // and let the UI offer the "open Settings" path.
+      _emitError(BleError.permissionDenied(permanent: true));
+      return false;
+    }
+
+    // 3. Subscribe to ranging, with error handling.
+    _sub = _api.ranging(_regions).listen(
+      _onRangingResult,
+      onError: _onRangingError,
+    );
     _initialized = true;
     return true;
+  }
+
+  void _onRangingError(Object error) {
+    if (_disposed) return;
+    _emitError(BleError.rangingFailed(error));
+    _scheduleRetry();
+  }
+
+  void _scheduleRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = Timer(const Duration(seconds: 3), () {
+      if (_disposed) return;
+      _restartRanging();
+    });
+  }
+
+  Future<void> _restartRanging() async {
+    await _sub?.cancel();
+    if (_disposed) return;
+    _sub = _api.ranging(_regions).listen(
+      _onRangingResult,
+      onError: _onRangingError,
+    );
   }
 
   void _onRangingResult(fb.RangingResult result) {
@@ -134,13 +196,21 @@ class BleRssiSource implements RssiSource {
     return true;
   }
 
+  void _emitError(BleError err) {
+    if (!_errors.isClosed) {
+      _errors.add(err);
+    }
+  }
+
   @override
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    _retryTimer?.cancel();
     await _sub?.cancel();
     _sub = null;
     _initialized = false;
-    if (!_changes.isClosed) {
-      await _changes.close();
-    }
+    await _changes.close();
+    await _errors.close();
   }
 }

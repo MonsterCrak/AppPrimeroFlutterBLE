@@ -10,11 +10,14 @@ import 'dart:async';
 import 'package:app_primero_flutter_ble/models/house_map.dart';
 import 'package:app_primero_flutter_ble/models/rssi_sample.dart';
 import 'package:app_primero_flutter_ble/permissions/permission_service.dart';
+import 'package:app_primero_flutter_ble/sources/beacon_scanner_api.dart';
+import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/sources/ble_rssi_source.dart';
 import 'package:app_primero_flutter_ble/sources/simulated_rssi_source.dart';
 import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
 import 'package:app_primero_flutter_ble/view/home_screen.dart';
+import 'package:dchs_flutter_beacon/dchs_flutter_beacon.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -25,16 +28,21 @@ class _MockBleRssiSource extends Mock implements BleRssiSource {}
 
 class _MockPermissionService extends Mock implements PermissionService {}
 
+class _MockBeaconScannerApi extends Mock implements BeaconScannerApi {}
+
 void main() {
   late HouseMap houseMap;
   late _MockSimulatedRssiSource simSource;
   late _MockBleRssiSource bleSource;
   late _MockPermissionService permissionService;
+  late _MockBeaconScannerApi bleApi;
   late SimulationNotifier notifier;
   late ModeController modeController;
 
   setUpAll(() {
     registerFallbackValue(const Offset(0, 0));
+    registerFallbackValue(<fb.Region>[]);
+    registerFallbackValue(StreamController<void>.broadcast().stream);
   });
 
   setUp(() {
@@ -42,6 +50,7 @@ void main() {
     simSource = _MockSimulatedRssiSource();
     bleSource = _MockBleRssiSource();
     permissionService = _MockPermissionService();
+    bleApi = _MockBeaconScannerApi();
 
     when(() => simSource.current()).thenReturn({
       for (final b in houseMap.beacons)
@@ -57,11 +66,25 @@ void main() {
       'B2': RssiSample(beaconId: 'B2', dbm: -65, distance: 1.5),
       'B3': RssiSample(beaconId: 'B3', dbm: -75, distance: 3.0),
     });
+    when(() => bleSource.errors)
+        .thenAnswer((_) => StreamController<BleError>.broadcast().stream);
     when(() => bleSource.changes)
         .thenAnswer((_) => StreamController<void>.broadcast().stream);
     when(() => bleSource.updateUserPosition(any())).thenReturn(null);
     when(() => bleSource.dispose()).thenAnswer((_) async {});
     when(() => bleSource.start()).thenAnswer((_) async => true);
+
+    // El mock del BleRssiSource simula un API real con BT encendido y OK.
+    when(() => bleApi.bluetoothState())
+        .thenAnswer((_) async => fb.BluetoothState.stateOn);
+    when(() => bleApi.initializeAndCheckScanning())
+        .thenAnswer((_) async => true);
+    when(() => bleApi.ranging(any()))
+        .thenAnswer((_) => StreamController<fb.RangingResult>.broadcast().stream);
+
+    // El BleRssiSource real (no el mock) se usa cuando el factory lo crea.
+    // Para los tests, usamos un mock. Pero necesitamos que el mock del
+    // BLE source emita los errors stream correctamente.
 
     notifier = SimulationNotifier(
       rssiSource: simSource,
@@ -81,11 +104,10 @@ void main() {
     modeController.dispose();
   });
 
-  Widget app({ValueChanged<String>? onError}) => MaterialApp(
+  Widget app() => MaterialApp(
         home: HomeScreen(
           notifier: notifier,
           modeController: modeController,
-          onError: onError,
         ),
       );
 
@@ -154,11 +176,10 @@ void main() {
     expect(find.text('MODO SIMULACIÓN'), findsOneWidget);
   });
 
-  testWidgets('Tap en Real BLE con permisos denegados dispara onError',
+  testWidgets('Tap en Real BLE con permisos denegados vuelve a Simulated',
       (tester) async {
     await denyPermissions(permanent: true);
-    String? captured;
-    await tester.pumpWidget(app(onError: (msg) => captured = msg));
+    await tester.pumpWidget(app());
 
     await tester.tap(find.text('Real BLE'));
     await tester.runAsync(() async {
@@ -166,8 +187,7 @@ void main() {
     });
     await tester.pumpAndSettle();
 
-    expect(captured, isNotNull);
-    expect(captured, contains('Bluetooth'));
+    expect(notifier.mode.name, 'simulated');
   });
 
   testWidgets(

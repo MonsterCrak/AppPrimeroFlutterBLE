@@ -1,4 +1,4 @@
-/// Abstraction over `flutter_beacon` for unit tests.
+/// Abstraction over `dchs_flutter_beacon` for unit tests.
 ///
 /// In production, [FlutterBeaconApi] wraps the singleton. In tests, a mock
 /// can be injected to avoid platform channels.
@@ -15,6 +15,12 @@ abstract class BeaconScannerApi {
 
   /// Open a stream of ranging results for the given regions.
   Stream<fb.RangingResult> ranging(List<fb.Region> regions);
+
+  /// Reports the current Bluetooth adapter state.
+  ///
+  /// Returns a [fb.BluetoothState] value: stateOn, stateOff, stateUnauthorized,
+  /// stateUnsupported, stateUnknown, stateResetting.
+  Future<fb.BluetoothState> bluetoothState();
 }
 
 class FlutterBeaconApi implements BeaconScannerApi {
@@ -26,5 +32,10 @@ class FlutterBeaconApi implements BeaconScannerApi {
   @override
   Stream<fb.RangingResult> ranging(List<fb.Region> regions) {
     return fb.flutterBeacon.ranging(regions);
+  }
+
+  @override
+  Future<fb.BluetoothState> bluetoothState() {
+    return fb.flutterBeacon.bluetoothState;
   }
 }
