@@ -1,20 +1,37 @@
 /// Home screen: composes the map, telemetry panel and control bar.
 ///
-/// The widget subscribes to a [SimulationNotifier] via `ListenableBuilder`.
+/// Wraps a [SimulationNotifier] (via [ListenableBuilder]) and a
+/// [ModeController] for swapping between simulated and real BLE sources.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:app_primero_flutter_ble/models/beacon_mode.dart';
+import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
 import 'package:app_primero_flutter_ble/view/widgets/control_bar.dart';
 import 'package:app_primero_flutter_ble/view/widgets/map_canvas.dart';
+import 'package:app_primero_flutter_ble/view/widgets/mode_selector.dart';
 import 'package:app_primero_flutter_ble/view/widgets/telemetry_panel.dart';
 
 class HomeScreen extends StatelessWidget {
   final SimulationNotifier notifier;
+  final ModeController modeController;
+  final ValueChanged<String>? onError;
 
-  const HomeScreen({super.key, required this.notifier});
+  const HomeScreen({
+    super.key,
+    required this.notifier,
+    required this.modeController,
+    this.onError,
+  });
+
+  Future<void> _onModeChanged(BuildContext context, BeaconMode target) async {
+    final result = await modeController.switchTo(target);
+    if (!result.ok && context.mounted) {
+      onError?.call(result.errorMessage ?? 'Error al cambiar de modo');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,10 +43,13 @@ class HomeScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Center(
-              child: _ModeBadge(
-                mode: notifier.mode == BeaconMode.simulated
-                    ? 'SIMULACIÓN'
-                    : 'REAL BLE',
+              child: ListenableBuilder(
+                listenable: notifier,
+                builder: (_, __) => _ModeBadge(
+                  mode: notifier.mode == BeaconMode.simulated
+                      ? 'SIMULACIÓN'
+                      : 'REAL BLE',
+                ),
               ),
             ),
           ),
@@ -38,35 +58,47 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: ListenableBuilder(
-            listenable: notifier,
-            builder: (context, _) {
-              return Column(
-                children: [
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 500),
-                        child: MapCanvas(
-                          houseMap: notifier.houseMap,
-                          userPosition: notifier.userPosition,
-                          route: notifier.waypoints,
-                        ),
+          child: Column(
+            children: [
+              ListenableBuilder(
+                listenable: notifier,
+                builder: (_, __) => ModeSelector(
+                  mode: notifier.mode,
+                  onChanged: (m) => _onModeChanged(context, m),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    child: ListenableBuilder(
+                      listenable: notifier,
+                      builder: (_, __) => MapCanvas(
+                        houseMap: notifier.houseMap,
+                        userPosition: notifier.userPosition,
+                        route: notifier.waypoints,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  const _Legend(),
-                  const SizedBox(height: 8),
-                  TelemetryPanel(notifier: notifier),
-                  const SizedBox(height: 12),
-                  ControlBar(
-                    notifier: notifier,
-                    onReset: notifier.reset,
-                  ),
-                ],
-              );
-            },
+                ),
+              ),
+              const SizedBox(height: 12),
+              const _Legend(),
+              const SizedBox(height: 8),
+              ListenableBuilder(
+                listenable: notifier,
+                builder: (_, __) => TelemetryPanel(notifier: notifier),
+              ),
+              const SizedBox(height: 12),
+              ListenableBuilder(
+                listenable: notifier,
+                builder: (_, __) => ControlBar(
+                  notifier: notifier,
+                  onReset: notifier.reset,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -83,10 +115,14 @@ class _ModeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: mode == 'SIMULACIÓN' ? Colors.amber.shade100 : Colors.red.shade100,
+        color: mode == 'SIMULACIÓN'
+            ? Colors.amber.shade100
+            : Colors.red.shade100,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: mode == 'SIMULACIÓN' ? Colors.amber.shade800 : Colors.red.shade800,
+          color: mode == 'SIMULACIÓN'
+              ? Colors.amber.shade800
+              : Colors.red.shade800,
         ),
       ),
       child: Text(
@@ -94,7 +130,9 @@ class _ModeBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
-          color: mode == 'SIMULACIÓN' ? Colors.amber.shade900 : Colors.red.shade900,
+          color: mode == 'SIMULACIÓN'
+              ? Colors.amber.shade900
+              : Colors.red.shade900,
         ),
       ),
     );

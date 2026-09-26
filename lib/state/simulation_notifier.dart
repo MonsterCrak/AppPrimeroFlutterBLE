@@ -3,6 +3,9 @@
 /// Owns the user position (interpolated along waypoints via a periodic
 /// timer), pulls RSSI snapshots from an injected [RssiSource], and exposes
 /// derived data (top-N nearest beacons) to the UI.
+///
+/// The [RssiSource] is mutable via [setRssiSource] so the UI can swap
+/// between simulated and real-BLE sources without rebuilding the notifier.
 library;
 
 import 'dart:async';
@@ -17,7 +20,7 @@ import 'package:app_primero_flutter_ble/models/rssi_sample.dart';
 import 'package:app_primero_flutter_ble/sources/rssi_source.dart';
 
 class SimulationNotifier extends ChangeNotifier {
-  final RssiSource _rssiSource;
+  RssiSource _rssiSource;
   final HouseMap _houseMap;
   final Duration _tickInterval;
 
@@ -32,18 +35,22 @@ class SimulationNotifier extends ChangeNotifier {
   Offset _userPosition = const Offset(0.5, 0.5);
   Map<String, RssiSample> _rssiSnapshot = const <String, RssiSample>{};
   bool _isRunning = false;
+  BeaconMode _mode = BeaconMode.simulated;
 
   /// Default route traverses the real house (see `E:\Obsidian\Tesis\
-  /// Emulador BLE Indoor\Distribución casa.md`), visiting the 3 beacons
-  /// in order B1 (Sala) → B2 (Pasadizo) → B3 (Padres).
+  /// Emulador BLE Indoor\Distribución casa.md`), visiting the 3
+  /// beacons in order B1 (Sala) → B2 (Pasadizo) → B3 (Padres).
   ///
   /// Coordinates are normalized [0, 1]. The route:
   ///   1. Starts near B1 in the Sala (north).
-  ///   2. Descends through the pasadizo (west column).
-  ///   3. Passes B2 at pasadizo center.
-  ///   4. Continues south into Cuarto Padres.
-  ///   5. Ends near B3 in the south.
-  ///   6. Loops back to start.
+  ///   2. Descends to the pasadizo entrance.
+  ///   3. Crosses the pasadizo to Mi cuarto's door.
+  ///   4. Goes east to B2 (east wall of Mi cuarto).
+  ///   5. Returns to the pasadizo.
+  ///   6. Continues south to the bottom of the pasadizo.
+  ///   7. Enters Cuarto Hermano.
+  ///   8. Goes west to B3 (west wall of Cuarto Hermano).
+  ///   9. Loops back to start.
   static const List<Offset> _defaultWaypoints = [
     Offset(0.622, 0.206), // start: bajar un poco desde B1 dentro de la Sala
     Offset(0.622, 0.082), // B1 Sala (pared norte)
@@ -80,10 +87,7 @@ class SimulationNotifier extends ChangeNotifier {
   HouseMap get houseMap => _houseMap;
   RssiSource get rssiSource => _rssiSource;
   List<Offset> get waypoints => List.unmodifiable(_waypoints);
-
-  /// Operating mode. Defaults to [BeaconMode.simulated]; Fase B will switch
-  /// this dynamically.
-  BeaconMode get mode => BeaconMode.simulated;
+  BeaconMode get mode => _mode;
 
   /// Top-N beacons sorted by distance to the user.
   List<RssiSample> nearestBeacons({int n = 3}) {
@@ -124,6 +128,36 @@ class SimulationNotifier extends ChangeNotifier {
     _userPosition = _waypoints.first;
     _rssiSource.updateUserPosition(_userPosition);
     _rssiSnapshot = _rssiSource.current();
+    notifyListeners();
+  }
+
+  /// Swaps the RSSI source. The previous source is disposed; the new one
+  /// is wired up and primed with the current user position.
+  ///
+  /// Use [setMode] to also update the UI badge.
+  Future<void> setRssiSource(RssiSource newSource) async {
+    if (identical(_rssiSource, newSource)) return;
+    await _sourceSub?.cancel();
+    _sourceSub = null;
+    final old = _rssiSource;
+    _rssiSource = newSource;
+    _rssiSource.updateUserPosition(_userPosition);
+    _rssiSnapshot = _rssiSource.current();
+    _sourceSub = _rssiSource.changes.listen((_) {
+      _rssiSnapshot = _rssiSource.current();
+      // Do not notify here: ticks drive notifications for simplicity.
+    });
+    notifyListeners();
+    // Dispose the previous source last, so any errors don't break state.
+    await old.dispose();
+  }
+
+  /// Updates the operating mode (Simulated vs Real BLE).
+  /// In Real BLE, the [ControlBar] should hide the Start button because
+  /// the user moves physically, not via timer.
+  void setMode(BeaconMode newMode) {
+    if (_mode == newMode) return;
+    _mode = newMode;
     notifyListeners();
   }
 

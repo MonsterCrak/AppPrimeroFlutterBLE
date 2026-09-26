@@ -1,5 +1,6 @@
 /// Entrypoint: builds the [SimulationNotifier] with a [SimulatedRssiSource]
-/// and mounts the [HomeScreen].
+/// and mounts the [HomeScreen] along with a [ModeController] for swapping
+/// between simulated and real BLE sources.
 library;
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,9 @@ import 'package:provider/provider.dart';
 
 import 'package:app_primero_flutter_ble/config/beacon_config.dart';
 import 'package:app_primero_flutter_ble/models/house_map.dart';
+import 'package:app_primero_flutter_ble/permissions/permission_service.dart';
 import 'package:app_primero_flutter_ble/sources/simulated_rssi_source.dart';
+import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
 import 'package:app_primero_flutter_ble/view/home_screen.dart';
 
@@ -20,8 +23,7 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // El estado se construye una sola vez (es Singleton para esta app).
-    // Cambiar la fuente aqui cambia el modo por defecto.
+    // State is constructed once (singleton-style for this app).
     final houseMap = HouseMap.miCasa().copyWith(
       beacons: BeaconConfig.buildBeacons(),
     );
@@ -29,6 +31,10 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
     final notifier = SimulationNotifier(
       rssiSource: rssiSource,
       houseMap: houseMap,
+    );
+    final modeController = ModeController(
+      notifier: notifier,
+      permissionService: SystemPermissionService(),
     );
 
     return ChangeNotifierProvider<SimulationNotifier>.value(
@@ -39,7 +45,16 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
           useMaterial3: true,
         ),
-        home: HomeScreen(notifier: notifier),
+        home: HomeScreen(
+          notifier: notifier,
+          modeController: modeController,
+          onError: (msg) {
+            // In a real app this would show a SnackBar via ScaffoldMessenger.
+            // For now we just log; the WU-13 wiring is complete.
+            // ignore: avoid_print
+            print('ModeController error: $msg');
+          },
+        ),
       ),
     );
   }

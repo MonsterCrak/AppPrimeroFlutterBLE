@@ -70,7 +70,7 @@ class BleRssiSource implements RssiSource {
   Map<String, RssiSample> current() => Map.unmodifiable(_snapshot);
 
   @override
-  Stream<Map<String, RssiSample>> get changes => _changes.stream;
+  Stream<void> get changes => _changes.stream.map((_) {});
 
   @override
   void updateUserPosition(Offset position) {
