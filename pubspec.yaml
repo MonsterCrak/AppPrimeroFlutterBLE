@@ -18,8 +18,16 @@ dependencies:
   # Permisos runtime (Bluetooth, ubicación)
   permission_handler: ^11.3.1
 
-  # Escaneo BLE real (Modo Real BLE)
-  flutter_blue_plus: 2.3.13
+  # Escaneo BLE iBeacon (Modo Real BLE — Android + iOS uniforme).
+  # Usa CoreLocation en iOS (requerido por Apple para iBeacons) y
+  # Android-Beacon-Library en Android.
+  #
+  # Usamos el fork `dchs_flutter_beacon` porque el `flutter_beacon`
+  # original (v0.5.1) está abandonado hace 5 años y no compila con
+  # AGP 8+ (falta namespace en su build.gradle y usa API legacy de
+  # PluginRegistry.Registrar). El fork está mantenido, portado a
+  # Kotlin, y mantiene la misma API pública.
+  dchs_flutter_beacon: 0.6.6
 
 dev_dependencies:
   flutter_test:
