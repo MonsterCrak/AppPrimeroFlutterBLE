@@ -5,12 +5,14 @@
 /// `permission_handler`.
 ///
 /// Required permissions by platform:
-/// - **Android**: `ACCESS_FINE_LOCATION` (driven by Android/Google policy —
-///   not optional for BLE scan), plus `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT`
-///   on Android 12+ (API 31+).
-/// - **iOS**: `NSBluetoothAlwaysUsageDescription` (any use of Bluetooth must
-///   be justified) and `NSLocationWhenInUseUsageDescription` (iBeacons go
-///   through CoreLocation, which Apple gates behind location permission).
+/// - **Android 12+ (API 31+)**: `ACCESS_FINE_LOCATION`, `BLUETOOTH_SCAN`,
+///   `BLUETOOTH_CONNECT`. We ask for `bluetoothScan` because that's the one
+///   required for ranging iBeacons; `bluetoothConnect` is auto-granted on
+///   install for our use case.
+/// - **Android <12**: `ACCESS_FINE_LOCATION`; `BLUETOOTH` legacy is
+///   granted at install time.
+/// - **iOS**: `NSBluetoothAlwaysUsageDescription` (any use of Bluetooth)
+///   and `NSLocationWhenInUseUsageDescription` (iBeacons via CoreLocation).
 library;
 
 import 'dart:async';
@@ -62,9 +64,6 @@ class PermissionStatusReport {
 }
 
 /// Result of a permission request flow.
-///
-/// Tells the UI whether to proceed (granted), open Settings (permanently
-/// denied), or retry.
 @immutable
 class PermissionRequestResult {
   final PermissionStatusReport finalStatus;
@@ -106,13 +105,18 @@ abstract class PermissionService {
 }
 
 class SystemPermissionService implements PermissionService {
+  /// On Android 12+ the relevant Bluetooth permission is `BLUETOOTH_SCAN`.
+  /// On older Android + iOS we use the generic `Permission.bluetooth`.
+  ph.Permission get _bluetoothPermission =>
+      Platform.isAndroid ? ph.Permission.bluetoothScan : ph.Permission.bluetooth;
+
   @override
   Future<PermissionStatusReport> check() async {
-    final bt = await _bluetoothStatus();
+    final bt = await _bluetoothPermission.status;
     final loc = await ph.Permission.locationWhenInUse.status;
     return PermissionStatusReport(
-      bluetoothGranted: bt.isGranted,
-      locationGranted: loc.isGranted,
+      bluetoothGranted: _isGranted(bt),
+      locationGranted: _isGranted(loc),
     );
   }
 
@@ -121,7 +125,7 @@ class SystemPermissionService implements PermissionService {
     // 1. Check current state. If anything is permanently denied, we cannot
     // recover with a popup — must go through Settings.
     final initial = await check();
-    final initialBt = await _bluetoothStatus();
+    final initialBt = await _bluetoothPermission.status;
     final initialLoc = await ph.Permission.locationWhenInUse.status;
     if (_isPermanentlyDenied(initialBt, initialLoc)) {
       return PermissionRequestResult(
@@ -133,18 +137,17 @@ class SystemPermissionService implements PermissionService {
       return PermissionRequestResult.granted(initial);
     }
 
-    // 2. Request the missing ones. permission_handler.request takes a
-    // single permission; we await them in parallel for snappiness.
+    // 2. Request the missing ones in parallel.
     final results = await Future.wait([
       ph.Permission.locationWhenInUse.request(),
-      _bluetoothRequest(),
+      _bluetoothPermission.request(),
     ]);
     final newLoc = results[0];
     final newBt = results[1];
 
     final finalStatus = PermissionStatusReport(
-      bluetoothGranted: newBt.isGranted,
-      locationGranted: newLoc.isGranted,
+      bluetoothGranted: _isGranted(newBt),
+      locationGranted: _isGranted(newLoc),
     );
 
     if (finalStatus.allGranted) {
@@ -167,24 +170,11 @@ class SystemPermissionService implements PermissionService {
     await ph.openAppSettings();
   }
 
+  bool _isGranted(ph.PermissionStatus s) => s.isGranted || s.isLimited;
+
   bool _isPermanentlyDenied(ph.PermissionStatus bt, ph.PermissionStatus loc) =>
       bt.isPermanentlyDenied ||
       loc.isPermanentlyDenied ||
       bt.isRestricted ||
       loc.isRestricted;
-
-  Future<ph.PermissionStatus> _bluetoothStatus() async {
-    // On Android 12+ this maps to BLUETOOTH_CONNECT (the Android scan
-    // permission is granted automatically with ACCESS_FINE_LOCATION).
-    if (Platform.isAndroid) {
-      // Read the actual BLUETOOTH_CONNECT state. On older Androids this
-      // returns "granted" without prompting.
-      return ph.Permission.bluetooth.status;
-    }
-    return ph.Permission.bluetooth.status;
-  }
-
-  Future<ph.PermissionStatus> _bluetoothRequest() async {
-    return ph.Permission.bluetooth.request();
-  }
 }
