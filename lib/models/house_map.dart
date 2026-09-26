@@ -32,8 +32,8 @@ class HouseMap {
     required this.beacons,
   });
 
-  /// Demo house: 3 rooms (sala, pasillo, habitacion) with 4 beacons at the
-  /// corners/walls. Coordinates are normalized to [0, 1].
+  /// Demo house: 3 rooms (sala, pasillo, habitacion) with 3 beacons — one
+  /// per zone. Coordinates are normalized to [0, 1].
   factory HouseMap.casaDemo() {
     return const HouseMap(
       name: 'CasaDemo',
@@ -55,18 +55,12 @@ class HouseMap {
         ),
         Beacon(
           id: 'B2',
-          label: 'Sala-B',
-          position: Offset(0.85, 0.20),
-          txPower: -59,
-        ),
-        Beacon(
-          id: 'B3',
           label: 'Pasillo',
           position: Offset(0.50, 0.55),
           txPower: -59,
         ),
         Beacon(
-          id: 'B4',
+          id: 'B3',
           label: 'Habitacion',
           position: Offset(0.80, 0.85),
           txPower: -59,

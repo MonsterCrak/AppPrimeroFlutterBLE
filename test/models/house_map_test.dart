@@ -16,8 +16,8 @@ void main() {
       expect(map.bounds, const Rect.fromLTWH(0, 0, 1, 1));
     });
 
-    test('tiene 4 beacons en esquinas/walls', () {
-      expect(map.beacons.length, 4);
+    test('tiene 3 beacons (uno por zona)', () {
+      expect(map.beacons.length, 3);
     });
 
     test('todos los beacons están dentro de [0, 1] x [0, 1]', () {
@@ -31,9 +31,13 @@ void main() {
 
     test('beaconById retorna el beacon correcto', () {
       expect(map.beaconById('B1')?.label, 'Sala-A');
-      expect(map.beaconById('B2')?.label, 'Sala-B');
-      expect(map.beaconById('B3')?.label, 'Pasillo');
-      expect(map.beaconById('B4')?.label, 'Habitacion');
+      expect(map.beaconById('B2')?.label, 'Pasillo');
+      expect(map.beaconById('B3')?.label, 'Habitacion');
+    });
+
+    test('IDs son únicos', () {
+      final ids = map.beacons.map((b) => b.id).toList();
+      expect(ids.toSet().length, ids.length);
     });
 
     test('beaconById retorna null para id inexistente', () {
