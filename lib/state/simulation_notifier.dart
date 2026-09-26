@@ -34,24 +34,29 @@ class SimulationNotifier extends ChangeNotifier {
   bool _isRunning = false;
 
   /// Default route traverses the real house (see `E:\Obsidian\Tesis\
-  /// Emulador BLE Indoor\Distribución casa.md`), visiting the 3 beacons
-  /// in order B1 (Sala) → B2 (Pasadizo) → B3 (Padres).
+  /// Emulador BLE Indoor\Distribucion Mi Casa.md`), visiting the 3
+  /// beacons in order B1 (Sala) → B2 (Mi cuarto) → B3 (Hermano).
   ///
   /// Coordinates are normalized [0, 1]. The route:
   ///   1. Starts near B1 in the Sala (north).
-  ///   2. Descends through the pasadizo (west column).
-  ///   3. Passes B2 at pasadizo center.
-  ///   4. Continues south into Cuarto Padres.
-  ///   5. Ends near B3 in the south.
-  ///   6. Loops back to start.
+  ///   2. Descends to the pasadizo entrance.
+  ///   3. Crosses the pasadizo to Mi cuarto's door.
+  ///   4. Goes east to B2 (east wall of Mi cuarto).
+  ///   5. Returns to the pasadizo.
+  ///   6. Continues south to the bottom of the pasadizo.
+  ///   7. Enters Cuarto Hermano.
+  ///   8. Goes west to B3 (west wall of Cuarto Hermano).
+  ///   9. Loops back to start.
   static const List<Offset> _defaultWaypoints = [
-    Offset(0.622, 0.206), // start: bajar un poco desde B1 dentro de la Sala
-    Offset(0.622, 0.082), // B1 Sala (pared norte)
-    Offset(0.444, 0.294), // bajar al pasadizo (sur de Sala)
-    Offset(0.311, 0.471), // B2 Pasadizo (centro)
-    Offset(0.311, 0.706), // seguir bajando por pasadizo
-    Offset(0.444, 0.812), // entrar al Cuarto Padres
-    Offset(0.600, 0.812), // B3 Padres (pared norte del cuarto)
+    Offset(0.489, 0.353), // start: entrar a Sala
+    Offset(0.489, 0.329), // B1 Sala (oeste, cerca de la puerta al pasadizo)
+    Offset(0.400, 0.424), // bajar al pasadizo sur
+    Offset(0.311, 0.541), // pasadizo frente a Mi cuarto
+    Offset(0.844, 0.541), // B2 Mi cuarto (pared este)
+    Offset(0.311, 0.682), // volver al pasadizo
+    Offset(0.311, 0.812), // bajar al fondo del pasadizo
+    Offset(0.222, 0.847), // entrar a Cuarto Hermano
+    Offset(0.089, 0.847), // B3 Hermano (pared oeste)
   ];
 
   SimulationNotifier({
