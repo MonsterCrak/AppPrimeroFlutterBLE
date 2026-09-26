@@ -37,13 +37,28 @@ class BeaconConfig {
   /// Mapping from Minor → logical beacon id used by the app (B1, B2, B3).
   ///
   /// Minor values assigned by the user via the Feasycom app:
-  ///   Minor 1 → B1 "Sala-A"
-  ///   Minor 2 → B2 "Pasillo"
-  ///   Minor 3 → B3 "Habitacion"
+  ///   Minor 1 → B1 "Sala"
+  ///   Minor 2 → B2 "Pasadizo"
+  ///   Minor 3 → B3 "Padres"
   static const Map<int, String> minorToBeaconId = {
     1: 'B1',
     2: 'B2',
     3: 'B3',
+  };
+
+  /// Suggested names to assign in the FeasyBeacon app for human
+  /// identification of each physical beacon. These names are stored in
+  /// the beacon's local memory ONLY — they do NOT travel in BLE
+  /// advertisements, so the app cannot see them. They help the user
+  /// tell the 3 physically identical beacons apart when configuring or
+  /// replacing batteries.
+  ///
+  /// Keep them short (≤15 chars) and ASCII — FeasyBeacon firmware
+  /// enforces these limits.
+  static const Map<String, String> feasyBeaconNames = {
+    'B1': 'FB104-Sala',
+    'B2': 'FB104-Pasadizo',
+    'B3': 'FB104-Padres',
   };
 
   /// Default physical position of each beacon in normalized [0, 1] coords.
