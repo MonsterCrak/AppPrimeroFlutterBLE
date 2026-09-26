@@ -1,0 +1,34 @@
+name: app_primero_flutter_ble
+description: "Emulador de posicionamiento BLE en interiores con Flutter — validación de lógica espacial con balizas Feasycom FSC-BP104D (BLE 5.1, chip Dialog DA14531)."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Estado reactivo (MVVM lightweight)
+  provider: ^6.1.2
+
+  # Permisos runtime (Bluetooth, ubicación)
+  permission_handler: ^11.3.1
+
+  # Escaneo BLE real (Modo Real BLE)
+  flutter_blue_plus: 2.3.13
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+  # Mocks para tests (flutter_blue_plus, permission_handler)
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
