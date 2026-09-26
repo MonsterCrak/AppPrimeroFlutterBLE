@@ -11,6 +11,7 @@ import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart';
 
 import 'package:app_primero_flutter_ble/models/beacon.dart';
+import 'package:app_primero_flutter_ble/models/beacon_mode.dart';
 import 'package:app_primero_flutter_ble/models/house_map.dart';
 import 'package:app_primero_flutter_ble/models/rssi_sample.dart';
 import 'package:app_primero_flutter_ble/sources/rssi_source.dart';
@@ -68,6 +69,10 @@ class SimulationNotifier extends ChangeNotifier {
   HouseMap get houseMap => _houseMap;
   RssiSource get rssiSource => _rssiSource;
   List<Offset> get waypoints => List.unmodifiable(_waypoints);
+
+  /// Operating mode. Defaults to [BeaconMode.simulated]; Fase B will switch
+  /// this dynamically.
+  BeaconMode get mode => BeaconMode.simulated;
 
   /// Top-N beacons sorted by distance to the user.
   List<RssiSample> nearestBeacons({int n = 3}) {
