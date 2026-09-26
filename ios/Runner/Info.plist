@@ -45,5 +45,16 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- ===== BLE / iBeacon permissions (added in WU-11) ===== -->
+	<!-- Apple requires apps to justify any use of Bluetooth to the user. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>This app uses Bluetooth to scan for indoor positioning beacons (Feasycom FSC-BP104D) and estimate your location within the house.</string>
+	<!-- iBeacons on iOS require CoreLocation (privacy policy). The "When in use"
+	     description is the minimum viable; the "Always" variant enables
+	     background scanning (not used yet, declared for future use). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app uses your location to detect iBeacon signals and compute your indoor position. The location is processed on-device and never leaves your phone.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app uses your location to detect iBeacon signals and compute your indoor position. The location is processed on-device and never leaves your phone.</string>
 </dict>
 </plist>

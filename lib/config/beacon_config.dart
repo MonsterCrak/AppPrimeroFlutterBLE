@@ -2,6 +2,15 @@
 ///
 /// Confirmed via Feasycom official app. Beacons are now in pure iBeacon mode
 /// (Eddystone tramas disabled).
+///
+/// > **Note on iOS compatibility:** the iBeacon format is an Apple-proprietary
+/// > protocol, but the BLE advertisement structure is a standard that any
+/// > modern device (Android with the right API, iOS with CoreLocation) knows
+/// > how to decode. The hardware setup here is platform-agnostic — **no
+/// > physical changes needed to work on iOS**. The only thing that changes
+/// > between platforms is software: iOS forces the app to use CoreLocation
+/// > (a plugin like `flutter_beacon`) and to request location permissions
+/// > in `Info.plist`. See `docs/DEPLOY_BEACONS.md` for details.
 library;
 
 import 'dart:ui' show Offset;
