@@ -108,17 +108,17 @@ void main() {
         home: HomeScreen(
           notifier: notifier,
           modeController: modeController,
+          permissionService: permissionService,
         ),
       );
 
   Future<void> grantPermissions() async {
     when(() => permissionService.request()).thenAnswer(
-      (_) async => const PermissionRequestResult(
-        finalStatus: PermissionStatusReport(
+      (_) async => PermissionRequestResult.granted(
+        const PermissionStatusReport(
           bluetoothGranted: true,
           locationGranted: true,
         ),
-        somePermanentlyDenied: false,
       ),
     );
   }
@@ -126,11 +126,13 @@ void main() {
   Future<void> denyPermissions({bool permanent = false}) async {
     when(() => permissionService.request()).thenAnswer(
       (_) async => PermissionRequestResult(
-        finalStatus: PermissionStatusReport(
+        finalStatus: const PermissionStatusReport(
           bluetoothGranted: false,
           locationGranted: false,
         ),
-        somePermanentlyDenied: permanent,
+        action: permanent
+            ? PermissionAction.openSettings
+            : PermissionAction.retry,
       ),
     );
   }

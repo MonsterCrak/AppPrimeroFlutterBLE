@@ -1,14 +1,38 @@
 /// Permission helper for BLE + location.
 ///
-/// Defines an abstract [PermissionService] interface (testable with mocktail)
-/// and a default [SystemPermissionService] that wraps `permission_handler`.
+/// Defines an abstract [PermissionService] interface (testable with
+/// mocktail) and a default [SystemPermissionService] that wraps
+/// `permission_handler`.
 ///
-/// Android requires Bluetooth + fine-location. iOS requires Bluetooth +
-/// location (because iBeacons go through CoreLocation).
+/// Required permissions by platform:
+/// - **Android**: `ACCESS_FINE_LOCATION` (driven by Android/Google policy —
+///   not optional for BLE scan), plus `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT`
+///   on Android 12+ (API 31+).
+/// - **iOS**: `NSBluetoothAlwaysUsageDescription` (any use of Bluetooth must
+///   be justified) and `NSLocationWhenInUseUsageDescription` (iBeacons go
+///   through CoreLocation, which Apple gates behind location permission).
 library;
+
+import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
+
+/// What the UI should do with a [PermissionRequestResult].
+enum PermissionAction {
+  /// All permissions are granted — proceed with BLE initialization.
+  granted,
+
+  /// At least one permission is permanently denied. The UI should offer
+  /// an "Open Settings" action via [PermissionService.openSettings].
+  openSettings,
+
+  /// Permissions were denied (but not permanently). The UI can ask the
+  /// user to retry; in practice this means the OS will show the popup
+  /// again next time [PermissionService.request] is called.
+  retry,
+}
 
 /// Status of each individual permission we care about.
 @immutable
@@ -21,10 +45,8 @@ class PermissionStatusReport {
     required this.locationGranted,
   });
 
-  /// Whether the app has everything it needs to start a BLE scan.
   bool get allGranted => bluetoothGranted && locationGranted;
 
-  /// Human-readable description of what's missing, or null if all granted.
   String? get missingDescription {
     final missing = <String>[];
     if (!bluetoothGranted) missing.add('Bluetooth');
@@ -39,32 +61,50 @@ class PermissionStatusReport {
       'locationGranted: $locationGranted)';
 }
 
-/// Aggregate result of a permission request flow.
+/// Result of a permission request flow.
+///
+/// Tells the UI whether to proceed (granted), open Settings (permanently
+/// denied), or retry.
 @immutable
 class PermissionRequestResult {
   final PermissionStatusReport finalStatus;
-  final bool somePermanentlyDenied;
+  final PermissionAction action;
 
   const PermissionRequestResult({
     required this.finalStatus,
-    required this.somePermanentlyDenied,
+    required this.action,
   });
 
-  bool get allGranted => finalStatus.allGranted;
+  bool get allGranted => action == PermissionAction.granted;
+  bool get requiresOpenSettings =>
+      action == PermissionAction.openSettings;
+
+  /// Convenience factory.
+  factory PermissionRequestResult.granted(PermissionStatusReport status) =>
+      PermissionRequestResult(
+        finalStatus: status,
+        action: PermissionAction.granted,
+      );
 }
 
 abstract class PermissionService {
   /// Inspect current permission state without prompting.
   Future<PermissionStatusReport> check();
 
-  /// Prompt for any missing permissions in the correct order.
+  /// Prompt for any missing permissions.
   ///
-  /// Returns the final status + a flag for whether any was permanently denied
-  /// (Android: "Don't ask again", iOS: first-time denial).
+  /// Returns a [PermissionRequestResult] with an [PermissionAction]:
+  /// - [PermissionAction.granted] if everything is OK.
+  /// - [PermissionAction.openSettings] if at least one is permanently
+  ///   denied (UI must call [openSettings]).
+  /// - [PermissionAction.retry] if denied (non-permanent) — the OS may
+  ///   show the popup again next time.
   Future<PermissionRequestResult> request();
+
+  /// Open the system app-settings page for this app.
+  Future<void> openSettings();
 }
 
-/// Default implementation backed by `permission_handler`.
 class SystemPermissionService implements PermissionService {
   @override
   Future<PermissionStatusReport> check() async {
@@ -78,34 +118,69 @@ class SystemPermissionService implements PermissionService {
 
   @override
   Future<PermissionRequestResult> request() async {
-    // Order matters: ask location first on iOS (Apple shows this prompt
-    // earlier and more often), then Bluetooth. On Android the order is
-    // irrelevant since each prompt is independent.
-    final locationStatus = await ph.Permission.locationWhenInUse.request();
-    final bluetoothStatus = await _bluetoothRequest();
+    // 1. Check current state. If anything is permanently denied, we cannot
+    // recover with a popup — must go through Settings.
+    final initial = await check();
+    final initialBt = await _bluetoothStatus();
+    final initialLoc = await ph.Permission.locationWhenInUse.status;
+    if (_isPermanentlyDenied(initialBt, initialLoc)) {
+      return PermissionRequestResult(
+        finalStatus: initial,
+        action: PermissionAction.openSettings,
+      );
+    }
+    if (initial.allGranted) {
+      return PermissionRequestResult.granted(initial);
+    }
 
-    final result = PermissionStatusReport(
-      bluetoothGranted: bluetoothStatus.isGranted,
-      locationGranted: locationStatus.isGranted,
+    // 2. Request the missing ones. permission_handler.request takes a
+    // single permission; we await them in parallel for snappiness.
+    final results = await Future.wait([
+      ph.Permission.locationWhenInUse.request(),
+      _bluetoothRequest(),
+    ]);
+    final newLoc = results[0];
+    final newBt = results[1];
+
+    final finalStatus = PermissionStatusReport(
+      bluetoothGranted: newBt.isGranted,
+      locationGranted: newLoc.isGranted,
     );
 
-    final anyPermanentlyDenied = locationStatus.isPermanentlyDenied ||
-        bluetoothStatus.isPermanentlyDenied ||
-        locationStatus.isRestricted ||
-        bluetoothStatus.isRestricted;
-
+    if (finalStatus.allGranted) {
+      return PermissionRequestResult.granted(finalStatus);
+    }
+    if (_isPermanentlyDenied(newBt, newLoc)) {
+      return PermissionRequestResult(
+        finalStatus: finalStatus,
+        action: PermissionAction.openSettings,
+      );
+    }
     return PermissionRequestResult(
-      finalStatus: result,
-      somePermanentlyDenied: anyPermanentlyDenied,
+      finalStatus: finalStatus,
+      action: PermissionAction.retry,
     );
   }
 
-  /// On Android: `BLUETOOTH_CONNECT` (granted automatically at install on older
-  /// versions, runtime on Android 12+). On iOS: `NSBluetoothAlwaysUsageDescription`.
+  @override
+  Future<void> openSettings() async {
+    await ph.openAppSettings();
+  }
+
+  bool _isPermanentlyDenied(ph.PermissionStatus bt, ph.PermissionStatus loc) =>
+      bt.isPermanentlyDenied ||
+      loc.isPermanentlyDenied ||
+      bt.isRestricted ||
+      loc.isRestricted;
+
   Future<ph.PermissionStatus> _bluetoothStatus() async {
-    // permission_handler doesn't expose BLUETOOTH_CONNECT directly; on Android
-    // it's checked implicitly when starting a scan. We approximate with
-    // `Permission.bluetooth` (which maps to BLUETOOTH_CONNECT on Android 12+).
+    // On Android 12+ this maps to BLUETOOTH_CONNECT (the Android scan
+    // permission is granted automatically with ACCESS_FINE_LOCATION).
+    if (Platform.isAndroid) {
+      // Read the actual BLUETOOTH_CONNECT state. On older Androids this
+      // returns "granted" without prompting.
+      return ph.Permission.bluetooth.status;
+    }
     return ph.Permission.bluetooth.status;
   }
 

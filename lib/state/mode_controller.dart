@@ -70,10 +70,20 @@ class ModeController {
       lastResult = ModeSwitchResult.success(target);
     } else {
       final permResult = await permissionService.request();
+      if (permResult.action == PermissionAction.openSettings) {
+        lastResult = ModeSwitchResult.permissionDenied(
+          permanentlyDenied: true,
+          message:
+              'Permisos denegados permanentemente. Tocá "Settings" para '
+              'habilitarlos manualmente.',
+        );
+        return lastResult!;
+      }
       if (!permResult.allGranted) {
         lastResult = ModeSwitchResult.permissionDenied(
-          permResult.somePermanentlyDenied,
-          permResult.finalStatus.missingDescription ?? 'Permisos denegados',
+          permanentlyDenied: false,
+          message: permResult.finalStatus.missingDescription ??
+              'Permisos denegados.',
         );
         return lastResult!;
       }
@@ -81,7 +91,6 @@ class ModeController {
       final ble = createBle();
       final started = await ble.start();
       if (!started) {
-        // Capture the most recent error (Bluetooth off / permission denied).
         final captured = await _captureNextBleError(ble, const Duration(seconds: 1));
         await ble.dispose();
         lastResult = ModeSwitchResult.bleError(
@@ -168,10 +177,10 @@ class ModeSwitchResult {
   factory ModeSwitchResult.success(BeaconMode mode) =>
       ModeSwitchResult._(ok: true, mode: mode);
 
-  factory ModeSwitchResult.permissionDenied(
-    bool permanentlyDenied,
-    String message,
-  ) =>
+  factory ModeSwitchResult.permissionDenied({
+    required bool permanentlyDenied,
+    required String message,
+  }) =>
       ModeSwitchResult._(
         ok: false,
         permissionPermanentlyDenied: permanentlyDenied,

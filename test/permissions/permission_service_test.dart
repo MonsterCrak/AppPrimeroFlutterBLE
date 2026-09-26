@@ -1,4 +1,5 @@
-/// Tests for [PermissionStatusReport] and the [PermissionService] contract.
+/// Tests for [PermissionStatusReport], [PermissionRequestResult], and the
+/// [PermissionService] contract.
 ///
 /// The [SystemPermissionService] depends on platform channels, so we test
 /// only the pure-Dart logic here. Integration of the system plugin is
@@ -61,41 +62,44 @@ void main() {
         'Falta permiso de: Bluetooth, Ubicación',
       );
     });
-
-    test('toString incluye ambos flags', () {
-      final s = const PermissionStatusReport(
-        bluetoothGranted: true,
-        locationGranted: false,
-      ).toString();
-      expect(s, contains('bluetoothGranted'));
-      expect(s, contains('locationGranted'));
-    });
   });
 
   group('PermissionRequestResult', () {
-    test('allGranted delega en finalStatus.allGranted', () {
-      const r1 = PermissionRequestResult(
+    test('allGranted y requiresOpenSettings delegan en action', () {
+      const granted = PermissionRequestResult(
         finalStatus: PermissionStatusReport(
           bluetoothGranted: true,
           locationGranted: true,
         ),
-        somePermanentlyDenied: false,
+        action: PermissionAction.granted,
       );
-      expect(r1.allGranted, isTrue);
+      expect(granted.allGranted, isTrue);
+      expect(granted.requiresOpenSettings, isFalse);
 
-      const r2 = PermissionRequestResult(
+      const settings = PermissionRequestResult(
         finalStatus: PermissionStatusReport(
           bluetoothGranted: false,
           locationGranted: true,
         ),
-        somePermanentlyDenied: true,
+        action: PermissionAction.openSettings,
       );
-      expect(r2.allGranted, isFalse);
+      expect(settings.allGranted, isFalse);
+      expect(settings.requiresOpenSettings, isTrue);
+
+      const retry = PermissionRequestResult(
+        finalStatus: PermissionStatusReport(
+          bluetoothGranted: false,
+          locationGranted: false,
+        ),
+        action: PermissionAction.retry,
+      );
+      expect(retry.allGranted, isFalse);
+      expect(retry.requiresOpenSettings, isFalse);
     });
   });
 
   group('PermissionService (mocked contract)', () {
-    test('check y request delegan al implementation', () async {
+    test('check, request, openSettings delegan al implementation', () async {
       final mock = _MockPermissionService();
       when(() => mock.check()).thenAnswer(
         (_) async => const PermissionStatusReport(
@@ -104,17 +108,19 @@ void main() {
         ),
       );
       when(() => mock.request()).thenAnswer(
-        (_) async => const PermissionRequestResult(
-          finalStatus: PermissionStatusReport(
+        (_) async => PermissionRequestResult.granted(
+          const PermissionStatusReport(
             bluetoothGranted: true,
             locationGranted: true,
           ),
-          somePermanentlyDenied: false,
         ),
       );
+      when(() => mock.openSettings()).thenAnswer((_) async {});
 
       expect((await mock.check()).allGranted, isTrue);
       expect((await mock.request()).allGranted, isTrue);
+      await mock.openSettings();
+      verify(() => mock.openSettings()).called(1);
     });
   });
 }

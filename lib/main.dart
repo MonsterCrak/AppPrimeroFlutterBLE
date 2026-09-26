@@ -32,9 +32,10 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
       rssiSource: rssiSource,
       houseMap: houseMap,
     );
+    final permissionService = SystemPermissionService();
     final modeController = ModeController(
       notifier: notifier,
-      permissionService: SystemPermissionService(),
+      permissionService: permissionService,
     );
 
     return ChangeNotifierProvider<SimulationNotifier>.value(
@@ -48,6 +49,7 @@ class AppPrimeroFlutterBleApp extends StatelessWidget {
         home: HomeScreen(
           notifier: notifier,
           modeController: modeController,
+          permissionService: permissionService,
         ),
       ),
     );

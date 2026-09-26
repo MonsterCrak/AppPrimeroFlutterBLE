@@ -2,15 +2,16 @@
 ///
 /// Wraps a [SimulationNotifier] (via [ListenableBuilder]) and a
 /// [ModeController] for swapping between simulated and real BLE sources.
-/// Surfaces mode-switch errors and live BLE errors via SnackBars.
+/// Surfaces mode-switch errors and live BLE errors via SnackBars, with a
+/// "Settings" action when permissions are permanently denied.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart' as ph;
 
 import 'package:app_primero_flutter_ble/models/beacon_mode.dart';
+import 'package:app_primero_flutter_ble/permissions/permission_service.dart';
 import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
@@ -22,11 +23,13 @@ import 'package:app_primero_flutter_ble/view/widgets/telemetry_panel.dart';
 class HomeScreen extends StatefulWidget {
   final SimulationNotifier notifier;
   final ModeController modeController;
+  final PermissionService permissionService;
 
   const HomeScreen({
     super.key,
     required this.notifier,
     required this.modeController,
+    required this.permissionService,
   });
 
   @override
@@ -61,12 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text(err.message),
           backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 6),
+          duration: const Duration(seconds: 8),
           action: requiresSettings
               ? SnackBarAction(
                   label: 'Settings',
                   textColor: Colors.white,
-                  onPressed: () => ph.openAppSettings(),
+                  onPressed: () => widget.permissionService.openSettings(),
                 )
               : SnackBarAction(
                   label: 'OK',
@@ -87,14 +90,18 @@ class _HomeScreenState extends State<HomeScreen> {
           SnackBar(
             content: Text(result.errorMessage ?? 'Error al cambiar de modo'),
             backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 6),
+            duration: const Duration(seconds: 10),
             action: result.requiresOpenSettings
                 ? SnackBarAction(
                     label: 'Settings',
                     textColor: Colors.white,
-                    onPressed: () => ph.openAppSettings(),
+                    onPressed: () => widget.permissionService.openSettings(),
                   )
-                : null,
+                : SnackBarAction(
+                    label: 'OK',
+                    textColor: Colors.white,
+                    onPressed: () {},
+                  ),
           ),
         );
     }
