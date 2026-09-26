@@ -88,22 +88,15 @@ flutter analyze
 # Correr todos los tests
 flutter test
 
-# Correr la app en Windows (requiere Developer Mode)
-flutter run -d windows
+# Correr la app en Android (emulador o dispositivo)
+flutter run -d android
 
-# Correr en Chrome (útil para iterar rápido sin permisos BLE)
-flutter run -d chrome
+# Correr la app en iOS (solo desde macOS con Xcode)
+flutter run -d ios
 ```
 
-> [!note] Developer Mode
-> El `pub get` mostró un warning pidiendo Developer Mode. Es necesario para que los plugins nativos (incluido `flutter_blue_plus`) funcionen en Windows. Ver § "Habilitar Developer Mode" más abajo.
-
-## Habilitar Developer Mode (Windows)
-
-1. `Win + R` → `ms-settings:developers` → Enter.
-2. Activar **Developer Mode**.
-3. Reiniciar la terminal.
-4. `flutter doctor` debería mostrar ✓ en Windows.
+> [!note] Plataformas soportadas
+> Este proyecto es **mobile-only** (Android + iOS). No hay soporte para Windows, macOS, Linux ni Web. Si necesitás agregar una plataforma, editá el comando `flutter create --platforms=android,ios` en la WU-0 del plan.
 
 ## Próximos pasos arquitectónicos
 

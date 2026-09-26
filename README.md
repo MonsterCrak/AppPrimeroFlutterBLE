@@ -23,23 +23,24 @@ Visualiza el rastreo de un usuario en un plano 2D de una casa, mostrando en tiem
 ## Quickstart
 
 ```bash
-# 1. Habilitar Developer Mode (solo Windows, una vez)
-#    Win+R → ms-settings:developers → activar Developer Mode → reiniciar terminal
-
-# 2. Instalar dependencias
+# 1. Instalar dependencias
 flutter pub get
 
-# 3. Correr análisis estático (debe pasar limpio)
+# 2. Correr análisis estático (debe pasar limpio)
 flutter analyze
 
-# 4. Correr tests
+# 3. Correr tests
 flutter test
 
-# 5. Correr la app (modo simulación, sin permisos)
-flutter run -d windows
-# o
-flutter run -d chrome
+# 4. Correr la app (modo simulación, sin permisos)
+#    Android (emulador o dispositivo físico):
+flutter run -d android
+#    iOS (solo macOS con Xcode):
+flutter run -d ios
 ```
+
+> [!note] Plataformas soportadas
+> Esta app es **mobile-only**: Android e iOS. No incluye Windows, macOS, Linux ni Web. Si necesitás otra plataforma, regenerala con `flutter create --platforms=...`.
 
 ## Arquitectura
 
