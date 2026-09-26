@@ -149,25 +149,23 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      // Casa real del usuario + 3 beacons en sus posiciones finales.
+      // Casa real del usuario + 3 beacons con posiciones reales.
       final micasa = HouseMap.miCasa().copyWith(
         beacons: const [
-          Beacon(id: 'B1', label: 'Sala', position: Offset(0.489, 0.329), txPower: -59),
-          Beacon(id: 'B2', label: 'Mi cuarto', position: Offset(0.844, 0.541), txPower: -59),
-          Beacon(id: 'B3', label: 'Hermano', position: Offset(0.089, 0.847), txPower: -59),
+          Beacon(id: 'B1', label: 'Sala', position: Offset(0.622, 0.082), txPower: -59),
+          Beacon(id: 'B2', label: 'Pasadizo', position: Offset(0.311, 0.471), txPower: -59),
+          Beacon(id: 'B3', label: 'Padres', position: Offset(0.600, 0.812), txPower: -59),
         ],
       );
 
       const route = [
-        Offset(0.489, 0.353),
-        Offset(0.489, 0.329),
-        Offset(0.400, 0.424),
-        Offset(0.311, 0.541),
-        Offset(0.844, 0.541),
-        Offset(0.311, 0.682),
-        Offset(0.311, 0.812),
-        Offset(0.222, 0.847),
-        Offset(0.089, 0.847),
+        Offset(0.622, 0.206),
+        Offset(0.622, 0.082),
+        Offset(0.444, 0.294),
+        Offset(0.311, 0.471),
+        Offset(0.311, 0.706),
+        Offset(0.444, 0.812),
+        Offset(0.600, 0.812),
       ];
 
       await tester.pumpWidget(
@@ -180,7 +178,7 @@ void main() {
                 height: 400,
                 child: MapCanvas(
                   houseMap: micasa,
-                  userPosition: const Offset(0.311, 0.541),
+                  userPosition: const Offset(0.444, 0.294),
                   route: route,
                 ),
               ),

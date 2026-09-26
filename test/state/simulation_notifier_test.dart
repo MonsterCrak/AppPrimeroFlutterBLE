@@ -16,7 +16,7 @@ import 'package:mocktail/mocktail.dart';
 class _MockRssiSource extends Mock implements RssiSource {}
 
 /// First default waypoint of the SimulationNotifier route (real house).
-const Offset _firstWaypoint = Offset(0.489, 0.353);
+const Offset _firstWaypoint = Offset(0.622, 0.206);
 
 void main() {
   late HouseMap houseMap;

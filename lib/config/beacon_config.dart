@@ -38,8 +38,8 @@ class BeaconConfig {
   ///
   /// Minor values assigned by the user via the Feasycom app:
   ///   Minor 1 → B1 "Sala"
-  ///   Minor 2 → B2 "Mi cuarto"
-  ///   Minor 3 → B3 "Hermano"
+  ///   Minor 2 → B2 "Pasadizo"
+  ///   Minor 3 → B3 "Padres"
   static const Map<int, String> minorToBeaconId = {
     1: 'B1',
     2: 'B2',
@@ -57,27 +57,23 @@ class BeaconConfig {
   /// enforces these limits.
   static const Map<String, String> feasyBeaconNames = {
     'B1': 'FB104-Sala',
-    'B2': 'FB104-MiCuarto',
-    'B3': 'FB104-Hermano',
+    'B2': 'FB104-Pasadizo',
+    'B3': 'FB104-Padres',
   };
 
-/// Default physical position of each beacon in normalized [0, 1] coords.
-///
-/// Distribution chosen by the user to maximize trianglulation coverage:
-///   - B1 "Sala":      SVG (220, 280)  → norm (0.489, 0.329) — near west
-///                      wall of Sala (by the door to the pasadizo).
-///   - B2 "Mi cuarto": SVG (380, 460)  → norm (0.844, 0.541) — east wall of
-///                      Mi cuarto.
-///   - B3 "Hermano":   SVG (40, 720)   → norm (0.089, 0.847) — west wall of
-///                      Cuarto Hermano.
-///
-/// The 3 positions form a roughly equilateral triangle (~0.41-0.82
-/// normalized side lengths), which gives the trilateration algorithm
-/// the best numeric conditioning.
+  /// Default physical position of each beacon in normalized [0, 1] coords.
+  ///
+  /// Coordinates derived from the user's SVG floorplan (viewBox 450 x 850):
+  ///   - B1 "Sala":     SVG (280, 70)   → norm (0.622, 0.082)
+  ///   - B2 "Pasadizo": SVG (140, 400)  → norm (0.311, 0.471)
+  ///   - B3 "Padres":   SVG (270, 690)  → norm (0.600, 0.812)
+  ///
+  /// Used by the simulated source; real BLE scanner will use whatever the
+  /// scanner reports (or manual mapping assigned later).
   static const Map<String, Offset> defaultPositions = {
-    'B1': Offset(0.489, 0.329),
-    'B2': Offset(0.844, 0.541),
-    'B3': Offset(0.089, 0.847),
+    'B1': Offset(0.622, 0.082),
+    'B2': Offset(0.311, 0.471),
+    'B3': Offset(0.600, 0.812),
   };
 
   /// Builds the list of configured beacons (used by SimulatedRssiSource and
