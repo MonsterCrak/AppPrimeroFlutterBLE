@@ -101,5 +101,83 @@ void main() {
         matchesGoldenFile('goldens/map_canvas_casaDemo.png'),
       );
     });
+
+    testWidgets(
+        'matchea golden file con usuario + ruta', (tester) async {
+      tester.view.physicalSize = const Size(400, 400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const route = [
+        Offset(0.15, 0.85),
+        Offset(0.15, 0.20),
+        Offset(0.50, 0.55),
+        Offset(0.80, 0.85),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: SizedBox(
+                width: 400,
+                height: 400,
+                child: MapCanvas(
+                  houseMap: HouseMap.casaDemo(),
+                  userPosition: const Offset(0.50, 0.55),
+                  route: route,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byType(MapCanvas),
+        matchesGoldenFile('goldens/map_canvas_with_user.png'),
+      );
+    });
+  });
+
+  group('HousePainter con userPosition', () {
+    test('no lanza con userPosition = null', () {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 400, 400));
+      final painter = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        userPosition: null,
+      );
+      expect(() => painter.paint(canvas, const Size(400, 400)),
+          returnsNormally);
+      recorder.endRecording().dispose();
+    });
+
+    test('no lanza con userPosition valida y ruta con 2 puntos', () {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, 400, 400));
+      final painter = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        userPosition: const Offset(0.5, 0.5),
+        route: const [Offset(0.1, 0.1), Offset(0.9, 0.9)],
+      );
+      expect(() => painter.paint(canvas, const Size(400, 400)),
+          returnsNormally);
+      recorder.endRecording().dispose();
+    });
+
+    test('shouldRepaint es true si userPosition cambia', () {
+      final p1 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        userPosition: const Offset(0.1, 0.1),
+      );
+      final p2 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        userPosition: const Offset(0.9, 0.9),
+      );
+      expect(p1.shouldRepaint(p2), isTrue);
+    });
   });
 }

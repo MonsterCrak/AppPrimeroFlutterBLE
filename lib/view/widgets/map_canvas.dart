@@ -1,7 +1,6 @@
 /// Widget wrapper around the [HousePainter].
 ///
-/// The canvas is square by default (aspect ratio 1.0). It fills the available
-/// width and centers vertically.
+/// Optional [userPosition] and [route] add the user dot and planned route.
 library;
 
 import 'package:flutter/material.dart';
@@ -11,8 +10,15 @@ import 'package:app_primero_flutter_ble/view/widgets/house_painter.dart';
 
 class MapCanvas extends StatelessWidget {
   final HouseMap houseMap;
+  final Offset? userPosition;
+  final List<Offset> route;
 
-  const MapCanvas({super.key, required this.houseMap});
+  const MapCanvas({
+    super.key,
+    required this.houseMap,
+    this.userPosition,
+    this.route = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +30,11 @@ class MapCanvas extends StatelessWidget {
           color: Colors.white,
         ),
         child: CustomPaint(
-          painter: HousePainter(houseMap: houseMap),
+          painter: HousePainter(
+            houseMap: houseMap,
+            userPosition: userPosition,
+            route: route,
+          ),
           size: Size.infinite,
         ),
       ),
