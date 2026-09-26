@@ -67,6 +67,39 @@ void main() {
     });
   });
 
+  group('HouseMap.miCasa (real house)', () {
+    test('tiene 8 habitaciones (incluye zona excluida)', () {
+      final micasa = HouseMap.miCasa();
+      expect(micasa.rooms.length, 8);
+    });
+
+    test('bounds son [0, 1] x [0, 1]', () {
+      final micasa = HouseMap.miCasa();
+      expect(micasa.bounds, const Rect.fromLTWH(0, 0, 1, 1));
+    });
+
+    test('miCasa viene sin beacons (se inyectan desde BeaconConfig)', () {
+      final micasa = HouseMap.miCasa();
+      expect(micasa.beacons, isEmpty);
+    });
+
+    test('copyWith reemplaza solo el campo pasado', () {
+      final micasa = HouseMap.miCasa();
+      const b1 = Beacon(
+        id: 'B1',
+        label: 'Sala',
+        position: Offset(0.622, 0.082),
+        txPower: -59,
+      );
+      final conB1 = micasa.copyWith(beacons: [b1]);
+      expect(conB1.beacons.length, 1);
+      expect(conB1.beacons.first.id, 'B1');
+      // Resto igual.
+      expect(conB1.rooms, micasa.rooms);
+      expect(conB1.bounds, micasa.bounds);
+    });
+  });
+
   group('HouseMap equality', () {
     test('mapas con mismos datos son iguales', () {
       const a = HouseMap(

@@ -47,12 +47,18 @@ class BeaconConfig {
   };
 
   /// Default physical position of each beacon in normalized [0, 1] coords.
+  ///
+  /// Coordinates derived from the user's SVG floorplan (viewBox 450 x 850):
+  ///   - B1 "Sala":     SVG (280, 70)   → norm (0.622, 0.082)
+  ///   - B2 "Pasadizo": SVG (140, 400)  → norm (0.311, 0.471)
+  ///   - B3 "Padres":   SVG (270, 690)  → norm (0.600, 0.812)
+  ///
   /// Used by the simulated source; real BLE scanner will use whatever the
   /// scanner reports (or manual mapping assigned later).
   static const Map<String, Offset> defaultPositions = {
-    'B1': Offset(0.15, 0.20),
-    'B2': Offset(0.50, 0.55),
-    'B3': Offset(0.80, 0.85),
+    'B1': Offset(0.622, 0.082),
+    'B2': Offset(0.311, 0.471),
+    'B3': Offset(0.600, 0.812),
   };
 
   /// Builds the list of configured beacons (used by SimulatedRssiSource and
@@ -72,11 +78,11 @@ class BeaconConfig {
   static String _labelFor(String id) {
     switch (id) {
       case 'B1':
-        return 'Sala-A';
+        return 'Sala';
       case 'B2':
-        return 'Pasillo';
+        return 'Pasadizo';
       case 'B3':
-        return 'Habitacion';
+        return 'Padres';
       default:
         return id;
     }

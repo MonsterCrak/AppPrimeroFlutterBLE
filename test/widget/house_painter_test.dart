@@ -8,6 +8,7 @@ library;
 
 import 'dart:ui' as ui;
 
+import 'package:app_primero_flutter_ble/models/beacon.dart';
 import 'package:app_primero_flutter_ble/models/house_map.dart';
 import 'package:app_primero_flutter_ble/view/widgets/house_painter.dart';
 import 'package:app_primero_flutter_ble/view/widgets/map_canvas.dart';
@@ -138,6 +139,57 @@ void main() {
       await expectLater(
         find.byType(MapCanvas),
         matchesGoldenFile('goldens/map_canvas_with_user.png'),
+      );
+    });
+
+    testWidgets('matchea golden file de miCasa (casa real del usuario)',
+        (tester) async {
+      tester.view.physicalSize = const Size(400, 400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // Casa real del usuario + 3 beacons con posiciones reales.
+      final micasa = HouseMap.miCasa().copyWith(
+        beacons: const [
+          Beacon(id: 'B1', label: 'Sala', position: Offset(0.622, 0.082), txPower: -59),
+          Beacon(id: 'B2', label: 'Pasadizo', position: Offset(0.311, 0.471), txPower: -59),
+          Beacon(id: 'B3', label: 'Padres', position: Offset(0.600, 0.812), txPower: -59),
+        ],
+      );
+
+      const route = [
+        Offset(0.622, 0.206),
+        Offset(0.622, 0.082),
+        Offset(0.444, 0.294),
+        Offset(0.311, 0.471),
+        Offset(0.311, 0.706),
+        Offset(0.444, 0.812),
+        Offset(0.600, 0.812),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: SizedBox(
+                width: 400,
+                height: 400,
+                child: MapCanvas(
+                  houseMap: micasa,
+                  userPosition: const Offset(0.444, 0.294),
+                  route: route,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await expectLater(
+        find.byType(MapCanvas),
+        matchesGoldenFile('goldens/map_canvas_miCasa.png'),
       );
     });
   });

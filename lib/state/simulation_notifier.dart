@@ -33,14 +33,25 @@ class SimulationNotifier extends ChangeNotifier {
   Map<String, RssiSample> _rssiSnapshot = const <String, RssiSample>{};
   bool _isRunning = false;
 
-  /// Default route visits the 3 demo beacons in order (B1 -> B2 -> B3).
+  /// Default route traverses the real house (see `E:\Obsidian\Tesis\
+  /// Emulador BLE Indoor\Distribución casa.md`), visiting the 3 beacons
+  /// in order B1 (Sala) → B2 (Pasadizo) → B3 (Padres).
+  ///
+  /// Coordinates are normalized [0, 1]. The route:
+  ///   1. Starts near B1 in the Sala (north).
+  ///   2. Descends through the pasadizo (west column).
+  ///   3. Passes B2 at pasadizo center.
+  ///   4. Continues south into Cuarto Padres.
+  ///   5. Ends near B3 in the south.
+  ///   6. Loops back to start.
   static const List<Offset> _defaultWaypoints = [
-    Offset(0.15, 0.85), // start (low-left)
-    Offset(0.15, 0.20), // B1 Sala-A
-    Offset(0.50, 0.20), // mid-air, turn
-    Offset(0.50, 0.55), // B2 Pasillo
-    Offset(0.80, 0.55), // mid-air, turn
-    Offset(0.80, 0.85), // B3 Habitacion
+    Offset(0.622, 0.206), // start: bajar un poco desde B1 dentro de la Sala
+    Offset(0.622, 0.082), // B1 Sala (pared norte)
+    Offset(0.444, 0.294), // bajar al pasadizo (sur de Sala)
+    Offset(0.311, 0.471), // B2 Pasadizo (centro)
+    Offset(0.311, 0.706), // seguir bajando por pasadizo
+    Offset(0.444, 0.812), // entrar al Cuarto Padres
+    Offset(0.600, 0.812), // B3 Padres (pared norte del cuarto)
   ];
 
   SimulationNotifier({
