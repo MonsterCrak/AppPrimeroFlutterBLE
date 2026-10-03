@@ -29,6 +29,7 @@ import 'package:app_primero_flutter_ble/models/rssi_sample.dart';
 import 'package:app_primero_flutter_ble/sources/beacon_scanner_api.dart';
 import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/sources/rssi_source.dart';
+import 'package:app_primero_flutter_ble/util/kalman_filter.dart';
 
 class BleRssiSource implements RssiSource {
   final BeaconScannerApi _api;
@@ -49,6 +50,11 @@ class BleRssiSource implements RssiSource {
   Timer? _retryTimer;
   bool _initialized = false;
   bool _disposed = false;
+
+  /// Per-beacon Kalman filter for smoothing RSSI readings. Each beacon
+  /// gets its own filter so they don't share state. Defaults: q=2.0,
+  /// r=16.0 (reasonable for indoor BLE, ~1 Hz samples).
+  final Map<String, KalmanFilter1D> _rssiFilters = <String, KalmanFilter1D>{};
 
   /// Constructor for production.
   ///
@@ -154,7 +160,22 @@ class BleRssiSource implements RssiSource {
   }
 
   void _onRangingResult(fb.RangingResult result) {
-    final next = mapRangingResult(result);
+    final raw = mapRangingResult(result);
+    final next = <String, RssiSample>{};
+    for (final entry in raw.entries) {
+      final id = entry.key;
+      final sample = entry.value;
+      final filter = _rssiFilters.putIfAbsent(
+        id,
+        () => KalmanFilter1D(q: 2.0, r: 16.0),
+      );
+      final smoothedDbm = filter.update(sample.dbm);
+      next[id] = RssiSample(
+        beaconId: id,
+        dbm: smoothedDbm,
+        distance: sample.distance,
+      );
+    }
     _snapshot
       ..clear()
       ..addAll(next);
