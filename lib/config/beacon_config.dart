@@ -23,7 +23,14 @@ class BeaconConfig {
   static const String proximityUuid = 'fda50693-a4e2-4fb1-afcf-c6eb07647825';
 
   /// Major common to all 3 beacons.
-  static const int major = 10065;
+  ///
+  /// **Fixed in diagnostic (2026-10-02):** the previous value `10065` was a
+  /// misconfiguration — the FSC-BP104D broadcasts `Major = 1` (verified via
+  /// external BLE scan). The Feasycom config app may display a different
+  /// number due to a UI quirk; what matters for this receiver code is the
+  /// advertised value. All 3 beacons share `major = 1` and are distinguished
+  /// by `Minor` (1 → Sala, 2 → Pasadizo, 3 → Padres).
+  static const int major = 1;
 
   /// Calibrated RSSI at 1 meter for all 3 beacons (set in Feasycom app).
   static const int txPowerDbm = -59;
