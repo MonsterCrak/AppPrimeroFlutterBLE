@@ -18,21 +18,24 @@ void main() {
     test('allGranted es true solo si ambos true', () {
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: true,
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
           locationGranted: true,
         ).allGranted,
         isTrue,
       );
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: false,
+          bluetoothScanGranted: false,
+          bluetoothConnectGranted: false,
           locationGranted: true,
         ).allGranted,
         isFalse,
       );
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: true,
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
           locationGranted: false,
         ).allGranted,
         isFalse,
@@ -42,21 +45,24 @@ void main() {
     test('missingDescription lista solo los faltantes', () {
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: true,
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
           locationGranted: true,
         ).missingDescription,
         isNull,
       );
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: false,
+          bluetoothScanGranted: false,
+          bluetoothConnectGranted: false,
           locationGranted: true,
         ).missingDescription,
         'Falta permiso de: Bluetooth',
       );
       expect(
         const PermissionStatusReport(
-          bluetoothGranted: false,
+          bluetoothScanGranted: false,
+          bluetoothConnectGranted: false,
           locationGranted: false,
         ).missingDescription,
         'Falta permiso de: Bluetooth, Ubicación',
@@ -68,7 +74,8 @@ void main() {
     test('allGranted y requiresOpenSettings delegan en action', () {
       const granted = PermissionRequestResult(
         finalStatus: PermissionStatusReport(
-          bluetoothGranted: true,
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
           locationGranted: true,
         ),
         action: PermissionAction.granted,
@@ -78,7 +85,8 @@ void main() {
 
       const settings = PermissionRequestResult(
         finalStatus: PermissionStatusReport(
-          bluetoothGranted: false,
+          bluetoothScanGranted: false,
+          bluetoothConnectGranted: false,
           locationGranted: true,
         ),
         action: PermissionAction.openSettings,
@@ -88,7 +96,8 @@ void main() {
 
       const retry = PermissionRequestResult(
         finalStatus: PermissionStatusReport(
-          bluetoothGranted: false,
+          bluetoothScanGranted: false,
+          bluetoothConnectGranted: false,
           locationGranted: false,
         ),
         action: PermissionAction.retry,
@@ -103,14 +112,16 @@ void main() {
       final mock = _MockPermissionService();
       when(() => mock.check()).thenAnswer(
         (_) async => const PermissionStatusReport(
-          bluetoothGranted: true,
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
           locationGranted: true,
         ),
       );
       when(() => mock.request()).thenAnswer(
         (_) async => PermissionRequestResult.granted(
           const PermissionStatusReport(
-            bluetoothGranted: true,
+            bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
             locationGranted: true,
           ),
         ),
