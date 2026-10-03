@@ -21,6 +21,11 @@ class HousePainter extends CustomPainter {
   final Offset? userPosition;
   final List<Offset> route;
 
+  /// Continuous pulse value in [0, 1] driving the beacon's radius animation.
+  /// At 0.0 the beacon is drawn at its base radius; at 1.0 it is 15 % larger.
+  /// Defaults to 0.0 so static callers (tests, goldens) get a stable image.
+  final double beaconPulseValue;
+
   // Colors and sizes — overridable for theming / tests.
   final Color roomFill;
   final Color roomStroke;
@@ -46,6 +51,7 @@ class HousePainter extends CustomPainter {
     required this.houseMap,
     this.userPosition,
     this.route = const [],
+    this.beaconPulseValue = 0.0,
     this.roomFill = const Color(0xFFEEEEEE),
     this.roomStroke = const Color(0xFF555555),
     this.beaconFill = const Color(0xFF66BB6A),
@@ -174,12 +180,33 @@ class HousePainter extends CustomPainter {
       ..color = beaconStroke
       ..style = PaintingStyle.stroke
       ..strokeWidth = beaconStrokeWidth;
-    final radius = beaconRadiusFraction * (w < h ? w : h);
+    final baseRadius = beaconRadiusFraction * (w < h ? w : h);
+    // 1.0 → 1.15 across the pulse cycle. Clamp for safety against bad inputs.
+    final pulse = beaconPulseValue.clamp(0.0, 1.0);
+    final pulseRadius = baseRadius * (1.0 + pulse * 0.15);
+
+    final userPx = userPosition == null
+        ? null
+        : Offset(userPosition!.dx * w, userPosition!.dy * h);
+    final distancePaint = Paint()
+      ..color = beaconStroke.withValues(alpha: 0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
 
     for (final beacon in houseMap.beacons) {
       final center = Offset(beacon.position.dx * w, beacon.position.dy * h);
-      canvas.drawCircle(center, radius, fill);
-      canvas.drawCircle(center, radius, stroke);
+      canvas.drawCircle(center, pulseRadius, fill);
+      canvas.drawCircle(center, pulseRadius, stroke);
+
+      // Distance circle from beacon center to user position — only when both
+      // points exist, the distance is meaningful on the canvas, and the user
+      // is within a sanity bound (>150 % of the canvas would be nonsense).
+      if (userPx != null) {
+        final d = (userPx - center).distance;
+        if (d >= w * 0.005 && d <= w * 1.5) {
+          canvas.drawCircle(center, d, distancePaint);
+        }
+      }
     }
   }
 
@@ -277,7 +304,8 @@ class HousePainter extends CustomPainter {
       old.userFill != userFill ||
       old.routeStroke != routeStroke ||
       old.wallColor != wallColor ||
-      old.labelColor != labelColor;
+      old.labelColor != labelColor ||
+      old.beaconPulseValue != beaconPulseValue;
 }
 
 bool _listEq(List<Offset> a, List<Offset> b) {

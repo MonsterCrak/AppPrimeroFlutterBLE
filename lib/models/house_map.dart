@@ -4,6 +4,7 @@
 /// the painter can map them to any canvas size.
 library;
 
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -30,13 +31,31 @@ class HouseMap {
   /// Defaults to empty for legacy callers; `miCasa()` populates it.
   final HouseLayout layout;
 
+  /// Real-world dimensions of the map in meters.
+  ///
+  /// When set, [roomScale] exposes the conversion factor from meters to
+  /// normalized units (so 1 m of real space maps to `roomScale` normalized
+  /// units). When null, the map is treated as dimensionless (legacy maps
+  /// used by the simulated source only).
+  final Size? realDimensions;
+
   const HouseMap({
     required this.name,
     required this.bounds,
     required this.rooms,
     required this.beacons,
     this.layout = const HouseLayout(),
+    this.realDimensions,
   });
+
+  /// Conversion factor from meters to normalized units for this map.
+  ///
+  /// Defined as `1.0 / max(width, height)` so the longest side of the real
+  /// room always maps to 1.0 in normalized space, keeping aspect ratio.
+  /// Returns 1.0 for maps without [realDimensions] (legacy / simulated only).
+  double get roomScale => realDimensions == null
+      ? 1.0
+      : 1.0 / math.max(realDimensions!.width, realDimensions!.height);
 
   /// Returns a copy of this map with the given fields replaced.
   HouseMap copyWith({
@@ -45,6 +64,7 @@ class HouseMap {
     List<Rect>? rooms,
     List<Beacon>? beacons,
     HouseLayout? layout,
+    Size? realDimensions,
   }) {
     return HouseMap(
       name: name ?? this.name,
@@ -52,6 +72,7 @@ class HouseMap {
       rooms: rooms ?? this.rooms,
       beacons: beacons ?? this.beacons,
       layout: layout ?? this.layout,
+      realDimensions: realDimensions ?? this.realDimensions,
     );
   }
 
@@ -125,6 +146,53 @@ class HouseMap {
     );
   }
 
+  /// Etapa 1 room for the physical practice beacon.
+  ///
+  /// Single rectangular room (`Cuarto 1`) measuring **3 m × 2.6 m × 2.6 m**
+  /// (height is unused for 2D positioning). One beacon is placed in the
+  /// upper-right corner, slightly inset so it remains visible inside the
+  /// bounds.
+  ///
+  /// Bounds use normalized [0, 1] coordinates with the longest side mapped
+  /// to 1.0 (so `width=1.0`, `height=2.6/3 ≈ 0.8667`). This preserves the
+  /// real aspect ratio of the room. See [roomScale] for the meters →
+  /// normalized conversion.
+  factory HouseMap.cuartoPracticaUno() {
+    return const HouseMap(
+      name: 'CuartoPractica1',
+      bounds: Rect.fromLTWH(0, 0, 1, 2.6 / 3),
+      rooms: [
+        Rect.fromLTWH(0, 0, 1, 2.6 / 3),
+      ],
+      beacons: [
+        Beacon(
+          id: 'B1',
+          label: 'Cuarto1',
+          position: Offset(0.95, 0.05),
+          txPower: -59,
+        ),
+      ],
+      // Labels clarifican el diagrama: el nombre del cuarto y el id de
+      // la baliza. No hay paredes/puertas/zonas excluidas porque Cuarto 1
+      // es un cuarto único y simple.
+      layout: HouseLayout(
+        labels: [
+          RoomLabel(
+            text: 'Cuarto 1',
+            position: Offset(0.5, 0.3),
+            fontFraction: 0.04,
+          ),
+          RoomLabel(
+            text: 'B1',
+            position: Offset(0.92, 0.13),
+            fontFraction: 0.025,
+          ),
+        ],
+      ),
+      realDimensions: Size(3.0, 2.6),
+    );
+  }
+
   /// Looks up a beacon by its ID. Returns null if not found.
   Beacon? beaconById(String id) {
     for (final b in beacons) {
@@ -144,7 +212,8 @@ class HouseMap {
           name == other.name &&
           bounds == other.bounds &&
           listEquals(rooms, other.rooms) &&
-          listEquals(beacons, other.beacons);
+          listEquals(beacons, other.beacons) &&
+          realDimensions == other.realDimensions;
 
   @override
   int get hashCode => Object.hash(
@@ -152,6 +221,7 @@ class HouseMap {
         bounds,
         Object.hashAll(rooms),
         Object.hashAll(beacons),
+        realDimensions,
       );
 
   @override

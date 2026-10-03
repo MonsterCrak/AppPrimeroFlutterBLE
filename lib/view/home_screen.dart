@@ -1,24 +1,25 @@
-/// Home screen: composes the map, telemetry panel and control bar.
+/// Top-level screen of the app.
 ///
-/// Wraps a [SimulationNotifier] (via [ListenableBuilder]) and a
-/// [ModeController] for swapping between simulated and real BLE sources.
-/// Surfaces mode-switch errors and live BLE errors via SnackBars, with a
-/// "Settings" action when permissions are permanently denied.
+/// Uses an [IndexedStack] to keep both tabs alive (the BLE pipeline and
+/// the scanner subscription stay mounted when switching tabs) and a
+/// custom [AppBottomNav] for the tab bar.
+///
+/// On [initState], kicks off the BLE permission flow so the user doesn't
+/// have to tap anything to start scanning.
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 
 import 'package:app_primero_flutter_ble/models/beacon_mode.dart';
 import 'package:app_primero_flutter_ble/permissions/permission_service.dart';
-import 'package:app_primero_flutter_ble/sources/ble_error.dart';
 import 'package:app_primero_flutter_ble/state/mode_controller.dart';
 import 'package:app_primero_flutter_ble/state/simulation_notifier.dart';
-import 'package:app_primero_flutter_ble/view/widgets/control_bar.dart';
-import 'package:app_primero_flutter_ble/view/widgets/map_canvas.dart';
-import 'package:app_primero_flutter_ble/view/widgets/mode_selector.dart';
-import 'package:app_primero_flutter_ble/view/widgets/telemetry_panel.dart';
+import 'package:app_primero_flutter_ble/view/screens/cuarto_screen.dart';
+import 'package:app_primero_flutter_ble/view/screens/scanner_screen.dart';
+import 'package:app_primero_flutter_ble/view/theme/app_theme.dart';
+import 'package:app_primero_flutter_ble/view/widgets/app_bottom_nav.dart';
 
 class HomeScreen extends StatefulWidget {
   final SimulationNotifier notifier;
@@ -37,221 +38,136 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  StreamSubscription<BleError?>? _errorsSub;
-  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  static const int _scannerTab = 0;
+  int _currentTab = _scannerTab;
 
   @override
   void initState() {
     super.initState();
-    _errorsSub = widget.modeController.errors.stream.listen(_showError);
-  }
-
-  @override
-  void dispose() {
-    _errorsSub?.cancel();
-    super.dispose();
-  }
-
-  void _showError(BleError? err) {
-    if (err == null || !mounted) return;
-    final messenger = _scaffoldMessengerKey.currentState;
-    if (messenger == null) return;
-
-    final requiresSettings = err.requiresOpenSettings;
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(err.message),
-          backgroundColor: Colors.red.shade700,
-          duration: const Duration(seconds: 8),
-          action: requiresSettings
-              ? SnackBarAction(
-                  label: 'Settings',
-                  textColor: Colors.white,
-                  onPressed: () => widget.permissionService.openSettings(),
-                )
-              : SnackBarAction(
-                  label: 'OK',
-                  textColor: Colors.white,
-                  onPressed: () {},
-                ),
-        ),
-      );
-  }
-
-  Future<void> _onModeChanged(BuildContext context, BeaconMode target) async {
-    final messenger = _scaffoldMessengerKey.currentState;
-    final result = await widget.modeController.switchTo(target);
-    if (!result.ok && messenger != null) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(result.errorMessage ?? 'Error al cambiar de modo'),
-            backgroundColor: Colors.red.shade700,
-            duration: const Duration(seconds: 10),
-            action: result.requiresOpenSettings
-                ? SnackBarAction(
-                    label: 'Settings',
-                    textColor: Colors.white,
-                    onPressed: () => widget.permissionService.openSettings(),
-                  )
-                : SnackBarAction(
-                    label: 'OK',
-                    textColor: Colors.white,
-                    onPressed: () {},
-                  ),
-          ),
-        );
-    }
+    // Boot directly into Real BLE: request permissions + start scanner
+    // asynchronously. Failures are surfaced through the mode controller's
+    // errors stream and shown on the Scanner tab.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Guard: only fire if not already in Real BLE (main() may have set
+      // it up; we want this call to be idempotent).
+      if (widget.notifier.mode != BeaconMode.realBle) {
+        // Fire-and-forget; the ModeController handles errors internally.
+        widget.modeController.switchTo(BeaconMode.realBle);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldMessenger(
-      key: _scaffoldMessengerKey,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Emulador BLE Indoor'),
-          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Center(
-                child: ListenableBuilder(
-                  listenable: widget.notifier,
-                  builder: (_, __) => _ModeBadge(
-                    mode: widget.notifier.mode == BeaconMode.simulated
-                        ? 'SIMULACIÓN'
-                        : 'REAL BLE',
-                  ),
-                ),
-              ),
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text(
+          'Emulador BLE Indoor',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
         ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+        backgroundColor: AppColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        actions: const [_ModeBadge()],
+      ),
+      body: IndexedStack(
+        index: _currentTab,
+        children: [
+          // Scanner tab — pre-built so the BLE errors subscription is
+          // mounted even while the user is on the Cuarto tab.
+          ScannerScreen(
+            notifier: widget.notifier,
+            modeController: widget.modeController,
+            permissionService: widget.permissionService,
+          ),
+          CuartoScreen(notifier: widget.notifier),
+        ],
+      ),
+      bottomNavigationBar: AppBottomNav(
+        currentIndex: _currentTab,
+        onTap: (i) => setState(() => _currentTab = i),
+        items: const [
+          AppNavTab(
+            label: 'Scanner',
+            icon: Icons.sensors_outlined,
+            activeIcon: Icons.sensors,
+          ),
+          AppNavTab(
+            label: 'Cuarto',
+            icon: Icons.map_outlined,
+            activeIcon: Icons.map,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top-right badge showing the current operating mode.
+///
+/// Always "REAL BLE" now (simulation is hidden from the UI) but we keep
+/// the visual treatment in case the architecture is ever extended to
+/// surface the simulated mode again.
+class _ModeBadge extends StatelessWidget {
+  const _ModeBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<SimulationNotifier, BeaconMode>(
+      selector: (_, n) => n.mode,
+      builder: (context, mode, _) {
+        final isReal = mode == BeaconMode.realBle;
+        final label = isReal ? 'REAL BLE' : 'SIMULACIÓN';
+        final color = isReal ? AppColors.success : AppColors.warning;
+        return Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.lg),
+          child: Container(
+            key: ValueKey<String>('mode-badge-$label'),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                ListenableBuilder(
-                  listenable: widget.notifier,
-                  builder: (_, __) => ModeSelector(
-                    mode: widget.notifier.mode,
-                    onChanged: (m) => _onModeChanged(context, m),
-                  ),
+                Icon(
+                  isReal ? Icons.sensors : Icons.science_outlined,
+                  size: 14,
+                  color: color,
                 ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 500),
-                      child: ListenableBuilder(
-                        listenable: widget.notifier,
-                        builder: (_, __) => MapCanvas(
-                          houseMap: widget.notifier.houseMap,
-                          userPosition: widget.notifier.userPosition,
-                          route: widget.notifier.waypoints,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const _Legend(),
-                const SizedBox(height: 8),
-                ListenableBuilder(
-                  listenable: widget.notifier,
-                  builder: (_, __) => TelemetryPanel(notifier: widget.notifier),
-                ),
-                const SizedBox(height: 12),
-                ListenableBuilder(
-                  listenable: widget.notifier,
-                  builder: (_, __) => ControlBar(
-                    notifier: widget.notifier,
-                    onReset: widget.notifier.reset,
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ModeBadge extends StatelessWidget {
-  final String mode;
-  const _ModeBadge({required this.mode});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: mode == 'SIMULACIÓN'
-            ? Colors.amber.shade100
-            : Colors.red.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: mode == 'SIMULACIÓN'
-              ? Colors.amber.shade800
-              : Colors.red.shade800,
-        ),
-      ),
-      child: Text(
-        'MODO $mode',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: mode == 'SIMULACIÓN'
-              ? Colors.amber.shade900
-              : Colors.red.shade900,
-        ),
-      ),
-    );
-  }
-}
-
-class _Legend extends StatelessWidget {
-  const _Legend();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: const [
-        _LegendDot(color: Color(0xFF66BB6A), label: 'Baliza'),
-        SizedBox(width: 12),
-        _LegendDot(color: Color(0xFF2196F3), label: 'Usuario'),
-        SizedBox(width: 12),
-        _LegendDot(color: Color(0xFF9E9E9E), label: 'Ruta'),
-      ],
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendDot({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
+          )
+              .animate(key: ValueKey<String>('mode-badge-anim-$label'))
+              .fadeIn(duration: 200.ms)
+              .scale(
+                begin: const Offset(1.15, 1.15),
+                end: const Offset(1, 1),
+                duration: 200.ms,
+                curve: Curves.easeOutBack,
+              ),
+        );
+      },
     );
   }
 }
