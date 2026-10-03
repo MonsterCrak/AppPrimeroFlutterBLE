@@ -3,9 +3,14 @@
     <!-- Tell Play Store the app uses BLE. -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
 
-    <!-- Android 12+ (API 31) new permissions. -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation" />
+    <!-- Android 12+ (API 31) new permissions.
+         IMPORTANT: do NOT add `usesPermissionFlags="neverForLocation"` here.
+         iBeacon IS a location protocol; Android-Beacon-Library needs to
+         derive location from BLE scans to do ranging. With that flag set,
+         ABL silently fails to deliver iBeacon events even when ranging is
+         "active" (verified 2026-10-02: app shows "no beacons" while the
+         OS-level scan finds the beacon fine via other apps). -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <!-- Location is required to detect BLE advertisements on Android
