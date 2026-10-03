@@ -132,4 +132,42 @@ void main() {
       expect(demo, isNot(equals(modified)));
     });
   });
+
+  group('HouseMap.cuartoPracticaUno', () {
+    final map = HouseMap.cuartoPracticaUno();
+
+    test('tiene 1 sola habitación (un solo room = los bounds)', () {
+      expect(map.rooms.length, 1);
+      expect(map.rooms.first, map.bounds);
+    });
+
+    test('bounds preservan aspect ratio del cuarto 3 × 2.6 m', () {
+      // 1 m = 1/3 normalized (longest side); altura = 2.6/3 ≈ 0.8667
+      expect(map.bounds, const Rect.fromLTWH(0, 0, 1, 2.6 / 3));
+    });
+
+    test('tiene 1 beacon (B1) en la esquina superior derecha', () {
+      expect(map.beacons.length, 1);
+      expect(map.beacons.first.id, 'B1');
+      expect(map.beacons.first.position, const Offset(0.95, 0.05));
+      expect(map.beacons.first.txPower, -59);
+    });
+
+    test('realDimensions documenta el tamaño real del cuarto', () {
+      expect(map.realDimensions, const Size(3.0, 2.6));
+      expect(map.roomScale, closeTo(1.0 / 3.0, 1e-9));
+    });
+
+    test('layout incluye labels "Cuarto 1" y "B1" para clarificar el diagrama', () {
+      expect(map.layout.labels.length, 2);
+      final texts = map.layout.labels.map((l) => l.text).toList();
+      expect(texts, containsAll(['Cuarto 1', 'B1']));
+    });
+
+    test('layout NO incluye paredes, puertas ni zonas excluidas', () {
+      expect(map.layout.walls, isEmpty);
+      expect(map.layout.doors, isEmpty);
+      expect(map.layout.excludedZones, isEmpty);
+    });
+  });
 }

@@ -231,5 +231,29 @@ void main() {
       );
       expect(p1.shouldRepaint(p2), isTrue);
     });
+
+    test('shouldRepaint es true si beaconPulseValue cambia', () {
+      final p1 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        beaconPulseValue: 0.0,
+      );
+      final p2 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        beaconPulseValue: 0.5,
+      );
+      expect(p1.shouldRepaint(p2), isTrue);
+    });
+
+    test('shouldRepaint es false si beaconPulseValue es el mismo', () {
+      final p1 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        beaconPulseValue: 0.25,
+      );
+      final p2 = HousePainter(
+        houseMap: HouseMap.casaDemo(),
+        beaconPulseValue: 0.25,
+      );
+      expect(p1.shouldRepaint(p2), isFalse);
+    });
   });
 }

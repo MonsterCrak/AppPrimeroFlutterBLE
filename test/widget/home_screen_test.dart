@@ -1,8 +1,11 @@
-/// Widget tests for [HomeScreen] + [ModeSelector] + [ModeController].
+/// Widget tests for [HomeScreen] tab structure + tab-specific smoke tests.
 ///
-/// Uses mocked [PermissionService], [SimulatedRssiSource], and
-/// [BleRssiSource] so the transition between Simulated and Real BLE
-/// can be exercised in isolation (no platform channels).
+/// The legacy tests used to drive the mode selector / start-stop button
+/// inside a single column view. After WU-19 the simulation view is
+/// hidden and the home screen exposes two tabs (Scanner / Cuarto). These
+/// tests cover the new structure: tabs are present, default tab is the
+/// Scanner, switching to Cuarto swaps the body, and the Scanner tab
+/// shows the BLE status card.
 library;
 
 import 'dart:async';
@@ -21,6 +24,7 @@ import 'package:dchs_flutter_beacon/dchs_flutter_beacon.dart' as fb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:provider/provider.dart';
 
 class _MockSimulatedRssiSource extends Mock implements SimulatedRssiSource {}
 
@@ -46,15 +50,14 @@ void main() {
   });
 
   setUp(() {
-    houseMap = HouseMap.casaDemo();
+    houseMap = HouseMap.cuartoPracticaUno();
     simSource = _MockSimulatedRssiSource();
     bleSource = _MockBleRssiSource();
     permissionService = _MockPermissionService();
     bleApi = _MockBeaconScannerApi();
 
     when(() => simSource.current()).thenReturn({
-      for (final b in houseMap.beacons)
-        b.id: RssiSample(beaconId: b.id, dbm: -70, distance: 1),
+      'B1': RssiSample(beaconId: 'B1', dbm: -55, distance: 2.0),
     });
     when(() => simSource.changes)
         .thenAnswer((_) => StreamController<void>.broadcast().stream);
@@ -63,8 +66,6 @@ void main() {
 
     when(() => bleSource.current()).thenReturn({
       'B1': RssiSample(beaconId: 'B1', dbm: -55, distance: 2.0),
-      'B2': RssiSample(beaconId: 'B2', dbm: -65, distance: 1.5),
-      'B3': RssiSample(beaconId: 'B3', dbm: -75, distance: 3.0),
     });
     when(() => bleSource.errors)
         .thenAnswer((_) => StreamController<BleError>.broadcast().stream);
@@ -74,7 +75,6 @@ void main() {
     when(() => bleSource.dispose()).thenAnswer((_) async {});
     when(() => bleSource.start()).thenAnswer((_) async => true);
 
-    // El mock del BleRssiSource simula un API real con BT encendido y OK.
     when(() => bleApi.bluetoothState())
         .thenAnswer((_) async => fb.BluetoothState.stateOn);
     when(() => bleApi.initializeAndCheckScanning())
@@ -82,9 +82,24 @@ void main() {
     when(() => bleApi.ranging(any()))
         .thenAnswer((_) => StreamController<fb.RangingResult>.broadcast().stream);
 
-    // El BleRssiSource real (no el mock) se usa cuando el factory lo crea.
-    // Para los tests, usamos un mock. Pero necesitamos que el mock del
-    // BLE source emita los errors stream correctamente.
+    // Permission check returns granted by default (used by Scanner screen
+    // on initState).
+    when(() => permissionService.check()).thenAnswer(
+      (_) async => const PermissionStatusReport(
+        bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
+        locationGranted: true,
+      ),
+    );
+    when(() => permissionService.request()).thenAnswer(
+      (_) async => PermissionRequestResult.granted(
+        const PermissionStatusReport(
+          bluetoothScanGranted: true,
+          bluetoothConnectGranted: true,
+          locationGranted: true,
+        ),
+      ),
+    );
 
     notifier = SimulationNotifier(
       rssiSource: simSource,
@@ -105,152 +120,86 @@ void main() {
   });
 
   Widget app() => MaterialApp(
-        home: HomeScreen(
-          notifier: notifier,
-          modeController: modeController,
-          permissionService: permissionService,
+        home: TickerMode(
+          // Disable repeating tickers (beacon pulse, scanning pulse dot)
+          // so pumpAndSettle can settle.
+          enabled: false,
+          child: ChangeNotifierProvider<SimulationNotifier>.value(
+            value: notifier,
+            child: HomeScreen(
+              notifier: notifier,
+              modeController: modeController,
+              permissionService: permissionService,
+            ),
+          ),
         ),
       );
 
-  Future<void> grantPermissions() async {
-    when(() => permissionService.request()).thenAnswer(
-      (_) async => PermissionRequestResult.granted(
-        const PermissionStatusReport(
-          bluetoothGranted: true,
-          locationGranted: true,
-        ),
-      ),
-    );
+  /// Drains pending Timers and any leaked 0-duration FakeTimers from
+  /// flutter_animate (which fires a `Future.delayed(Duration.zero, _play)`
+  /// on every `.animate()` mount).
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pumpAndSettle();
+    await tester.pump(Duration.zero);
+    await tester.pump(Duration.zero);
   }
 
-  Future<void> denyPermissions({bool permanent = false}) async {
-    when(() => permissionService.request()).thenAnswer(
-      (_) async => PermissionRequestResult(
-        finalStatus: const PermissionStatusReport(
-          bluetoothGranted: false,
-          locationGranted: false,
-        ),
-        action: permanent
-            ? PermissionAction.openSettings
-            : PermissionAction.retry,
-      ),
-    );
-  }
-
-  testWidgets('HomeScreen arranca con MODO SIMULACIÓN y muestra el selector',
-      (tester) async {
+  testWidgets('HomeScreen arranca en la pestaña Scanner', (tester) async {
     await tester.pumpWidget(app());
-    expect(find.text('MODO SIMULACIÓN'), findsOneWidget);
-    expect(find.text('Simulación'), findsOneWidget);
-    expect(find.text('Real BLE'), findsOneWidget);
-    expect(find.text('Iniciar'), findsOneWidget);
+    await settle(tester);
+
+    // Bottom nav has both tabs.
+    expect(find.text('Scanner'), findsOneWidget);
+    expect(find.text('Cuarto'), findsOneWidget);
+
+    // Scanner content is visible: status card section header.
+    expect(find.text('ESTADO BLE'), findsOneWidget);
+    expect(find.text('BALIZAS DETECTADAS'), findsOneWidget);
+
+    // Cuarto content is NOT visible (IndexedStack hides it).
+    expect(find.text('B1 sin señal'), findsNothing);
   });
 
-  testWidgets('Tap en Real BLE pide permisos y cambia el modo + el banner',
-      (tester) async {
-    await grantPermissions();
+  testWidgets('Tap en Cuarto cambia la pestaña activa', (tester) async {
     await tester.pumpWidget(app());
-    expect(find.text('MODO SIMULACIÓN'), findsOneWidget);
+    await settle(tester);
 
-    await tester.tap(find.text('Real BLE'));
-    // switchTo es async; usar runAsync para esperar el Future real.
+    // Initially on Scanner.
+    expect(find.text('ESTADO BLE'), findsOneWidget);
+    expect(find.text('B1 sin señal'), findsNothing);
+
+    await tester.tap(find.text('Cuarto'));
+    await tester.pumpAndSettle();
+
+    // Now Cuarto is visible: room title.
+    expect(find.text('Cuarto 1'), findsOneWidget);
+    expect(find.text('3.0 × 2.6 m'), findsOneWidget);
+  });
+
+  testWidgets('No hay controles de simulación en la UI', (tester) async {
+    await tester.pumpWidget(app());
+    await settle(tester);
+
+    // No mode selector, no Iniciar button, no legend.
+    expect(find.text('Iniciar'), findsNothing);
+    expect(find.text('Detener'), findsNothing);
+    expect(find.text('Reset'), findsNothing);
+    expect(find.text('Simulación'), findsNothing);
+    expect(find.text('MODO SIMULACIÓN'), findsNothing);
+  });
+
+  testWidgets('HomeScreen.initState arranca el modo Real BLE', (tester) async {
+    await tester.pumpWidget(app());
+    // The post-frame callback fires after the first frame.
+    await tester.pump();
     await tester.runAsync(() async {
       await Future<void>.delayed(Duration.zero);
     });
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     verify(() => permissionService.request()).called(1);
     expect(notifier.mode.name, 'realBle');
-    expect(find.text('MODO REAL BLE'), findsOneWidget);
-  });
-
-  testWidgets('Tap en Real BLE sin permisos vuelve a Simulated',
-      (tester) async {
-    await denyPermissions();
-    await tester.pumpWidget(app());
-    await tester.tap(find.text('Real BLE'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-
-    expect(notifier.mode.name, 'simulated');
-    expect(find.text('MODO SIMULACIÓN'), findsOneWidget);
-  });
-
-  testWidgets('Tap en Real BLE con permisos denegados vuelve a Simulated',
-      (tester) async {
-    await denyPermissions(permanent: true);
-    await tester.pumpWidget(app());
-
-    await tester.tap(find.text('Real BLE'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-
-    expect(notifier.mode.name, 'simulated');
-  });
-
-  testWidgets(
-      'En modo Real BLE el botón Iniciar está oculto (usuario camina)',
-      (tester) async {
-    await grantPermissions();
-    await tester.pumpWidget(app());
-
-    await tester.tap(find.text('Real BLE'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-
-    expect(find.text('Iniciar'), findsNothing);
-    expect(find.text('Detener'), findsNothing);
-  });
-
-  testWidgets('Volver a Simulación restaura el botón Iniciar',
-      (tester) async {
-    await grantPermissions();
-    await tester.pumpWidget(app());
-
-    await tester.tap(find.text('Real BLE'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-    expect(find.text('Iniciar'), findsNothing);
-
-    await tester.tap(find.text('Simulación'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-    expect(notifier.mode.name, 'simulated');
-    expect(find.text('Iniciar'), findsOneWidget);
-    expect(find.text('MODO SIMULACIÓN'), findsOneWidget);
-  });
-
-  testWidgets('El source real (BLE) reemplaza al simulado en el notifier',
-      (tester) async {
-    await grantPermissions();
-    await tester.pumpWidget(app());
-
-    expect(notifier.rssiSource, same(simSource));
-    await tester.tap(find.text('Real BLE'));
-    await tester.runAsync(() async {
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-    expect(notifier.rssiSource, same(bleSource));
-    verify(() => simSource.dispose()).called(1);
-  });
-
-  testWidgets('Cambiar al mismo modo no pide permisos (no-op)',
-      (tester) async {
-    await tester.pumpWidget(app());
-    await tester.tap(find.text('Simulación'));
-    await tester.pumpAndSettle();
-    verifyNever(() => permissionService.request());
-    expect(notifier.mode.name, 'simulated');
+    // The badge in the AppBar shows REAL BLE.
+    expect(find.text('REAL BLE'), findsWidgets);
   });
 }
